@@ -221,7 +221,7 @@ def fetch_war_indicators():
     mapping = {
         "CL=F": "Oil",
         "^VIX": "VIX",
-        "GC=F": "Gold",
+        "GLD": "Gold",
         "^GSPC": "S&P 500",
         "TLT": "TLT",
     }
@@ -798,7 +798,7 @@ with tab2:
             ):
                 try:
                     signals = get_technical_signals(_t)
-                    if signals:
+                    if signals and isinstance(signals, dict) and signals.get("status") == "ok":
                         cols_ta = st.columns(4)
                         rsi = signals.get("rsi", 50)
                         rsi_color = (
@@ -1104,29 +1104,39 @@ with tab3:
     # Two columns: ceasefire vs danger signals
     cease_col, danger_col = st.columns(2)
 
+    # Oil day-over-day change for signal checks
+    _oil_prev = 0
+    try:
+        _oil_hist = yf.Ticker("CL=F").history(period="5d")
+        if len(_oil_hist) >= 2:
+            _oil_prev = float(_oil_hist["Close"].iloc[-2])
+    except Exception:
+        pass
+    _oil_day_chg = ((oil_price - _oil_prev) / _oil_prev * 100) if _oil_prev > 0 else 0
+
+    # VIX3M for term structure check
+    _vix3m = 0
+    try:
+        _vix3m_info = yf.Ticker("^VIX3M").fast_info
+        _vix3m = float(_vix3m_info.get("lastPrice", _vix3m_info.get("last_price", 0)))
+    except Exception:
+        pass
+
     ceasefire_signals = [
-        ("Oil drops below $68", oil_price < 68, oil_price > 0),
-        ("VIX drops below 18", vix_val < 18, vix_val > 0),
-        (
-            "DAL up 10%+ from baseline",
-            current_prices.get("DAL", 0) > 58.25 * 1.1,
-            current_prices.get("DAL", 0) > 0,
-        ),
-        (
-            "RCL up 10%+ from baseline",
-            current_prices.get("RCL", 0) > 269.93 * 1.1,
-            current_prices.get("RCL", 0) > 0,
-        ),
-        ("Diplomatic talks announced", False, False),
-        ("Gold retreats 5%+ from peak", False, False),
+        ("Oil dropped 3%+ in one day", _oil_day_chg <= -3, oil_price > 0),
+        ("VIX below 20", vix_val < 20, vix_val > 0),
+        ("VIX backwardation (VIX > VIX3M)", vix_val > _vix3m and _vix3m > 0, vix_val > 0 and _vix3m > 0),
+        ("Iranian FM uses peace language", False, False),
+        ("Mediator country announces talks", False, False),
+        ("Trump makes clear peace statement", False, False),
     ]
 
     danger_signals = [
-        ("Oil above $80", oil_price > 80, oil_price > 0),
-        ("VIX above 35", vix_val > 35, vix_val > 0),
+        ("Oil spiked 10%+ in one day", _oil_day_chg >= 10, oil_price > 0),
+        ("VIX above 40", vix_val > 40, vix_val > 0),
         ("S&P drops 5%+ in a week", False, False),
-        ("Conflict escalation news", False, False),
-        ("Gold spikes above $3000/oz", gold_val > 3000, gold_val > 0),
+        ("Confirmed escalation news", False, False),
+        ("US military asset attacked", False, False),
     ]
 
     with cease_col:
@@ -1174,16 +1184,16 @@ with tab3:
     )
     perp_queries = [
         (
-            "Diplomatic talks Ukraine Russia",
-            "https://www.perplexity.ai/search?q=Ukraine+Russia+ceasefire+diplomatic+talks+today",
+            "Iran ceasefire / peace talks",
+            "https://www.perplexity.ai/search?q=Iran+US+Israel+ceasefire+peace+talks+today",
         ),
         (
-            "Conflict escalation news",
-            "https://www.perplexity.ai/search?q=Ukraine+Russia+conflict+escalation+today",
+            "Iran conflict escalation",
+            "https://www.perplexity.ai/search?q=Iran+US+Israel+conflict+escalation+today",
         ),
         (
-            "Gold peak analysis",
-            "https://www.perplexity.ai/search?q=gold+price+52+week+high+retreat",
+            "Trump Iran peace statement",
+            "https://www.perplexity.ai/search?q=Trump+Iran+ceasefire+peace+statement+today",
         ),
     ]
     for label, url in perp_queries:
@@ -1709,7 +1719,7 @@ with tab7:
         + today.strftime("%B %d, %Y")
         + ", Day "
         + str(conflict_day)
-        + " of the Ukraine-Russia conflict (started Feb 28, 2026).\n\n"
+        + " of the Iran-US-Israel conflict (started Feb 28, 2026).\n\n"
         + "My portfolio: LMT (1 share), RTX (6), LNG (4), GLD (2), ITA (5), "
         + "XOM (7), CEG (4), BAESY (10). Cash: $1,500.33.\n"
         + "Watching: DAL, RCL (ceasefire plays).\n"
@@ -1730,12 +1740,13 @@ with tab7:
         + "{:,.0f}".format(sp_val)
         + "\n\n"
         + "Questions:\n"
-        + "1. What is the latest on Ukraine-Russia ceasefire negotiations?\n"
-        + "2. Any new sanctions or military escalation in the last 24 hours?\n"
-        + "3. Oil market outlook for next 7 days given current geopolitics?\n"
+        + "1. What is the latest on Iran-US-Israel conflict and ceasefire signals?\n"
+        + "2. Any military escalation, new strikes, or diplomatic moves in last 24 hours?\n"
+        + "3. Oil market outlook given the Iran war premium?\n"
         + "4. Should I adjust any positions based on today's developments?\n"
-        + "5. Any signals to enter DAL or RCL?\n"
-        + "6. XRP/crypto regulatory developments?\n"
+        + "5. Any ceasefire signals to enter DAL or RCL?\n"
+        + "6. XRP/Ripple SEC lawsuit developments?\n"
+        + "7. Ukraine war update — any changes affecting European defence (BAESY)?\n"
     )
     st.code(perp_prompt, language="text")
 
@@ -1999,75 +2010,63 @@ with tab8:
                 unsafe_allow_html=True,
             )
 
-    # Data engine sections
-    if ENGINE:
-        st.markdown(
-            '<p class="section-label">Options Activity</p>',
-            unsafe_allow_html=True,
-        )
+    # Short interest (inline yfinance — no data engine needed)
+    st.markdown(
+        '<p class="section-label">Short Interest</p>',
+        unsafe_allow_html=True,
+    )
+    si_rows = []
+    for _t in PORTFOLIO_TICKERS:
         try:
-            opts = get_options_activity(PORTFOLIO_TICKERS)
-            if opts:
-                st.dataframe(
-                    pd.DataFrame(opts),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+            _info = yf.Ticker(_t).info
+            _sr = _info.get("shortRatio") or 0
+            _spf = _info.get("shortPercentOfFloat") or 0
+            _spf = round(_spf * 100, 1) if _spf < 1 else round(_spf, 1)
+            _squeeze = "HIGH" if _sr > 5 else ("MODERATE" if _sr > 2 else "LOW")
+            si_rows.append({"Stock": _t, "Days to Cover": round(_sr, 1),
+                           "Short % Float": str(_spf) + "%", "Squeeze Risk": _squeeze})
         except Exception:
-            st.info("Options data unavailable.")
+            si_rows.append({"Stock": _t, "Days to Cover": "N/A",
+                           "Short % Float": "N/A", "Squeeze Risk": "N/A"})
+    if si_rows:
+        st.dataframe(pd.DataFrame(si_rows), use_container_width=True, hide_index=True)
 
-        st.markdown(
-            '<p class="section-label">Sentiment</p>',
-            unsafe_allow_html=True,
-        )
+    # Analyst ratings (inline yfinance)
+    st.markdown(
+        '<p class="section-label">Analyst Ratings</p>',
+        unsafe_allow_html=True,
+    )
+    ar_rows = []
+    for _t in PORTFOLIO_TICKERS:
         try:
-            sentiment = get_stocktwits_sentiment(PORTFOLIO_TICKERS)
-            if sentiment:
-                st.dataframe(
-                    pd.DataFrame(sentiment),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+            _info = yf.Ticker(_t).info
+            _rec = (_info.get("recommendationKey") or "N/A").replace("_", " ").title()
+            _target = _info.get("targetMeanPrice")
+            _num = _info.get("numberOfAnalystOpinions") or 0
+            _cur = current_prices.get(_t, 0)
+            _upside = round((_target - _cur) / _cur * 100, 1) if _target and _cur else 0
+            ar_rows.append({"Stock": _t, "Rating": _rec, "Analysts": _num,
+                           "Target": fmt_dollar(_target) if _target else "N/A",
+                           "Upside": fmt_pct(_upside) if _target else "N/A"})
         except Exception:
-            st.info("Sentiment data unavailable.")
+            ar_rows.append({"Stock": _t, "Rating": "N/A", "Analysts": 0,
+                           "Target": "N/A", "Upside": "N/A"})
+    if ar_rows:
+        st.dataframe(pd.DataFrame(ar_rows), use_container_width=True, hide_index=True)
 
-        st.markdown(
-            '<p class="section-label">Short Interest</p>',
-            unsafe_allow_html=True,
-        )
-        try:
-            si = get_short_interest(PORTFOLIO_TICKERS)
-            if si:
-                st.dataframe(
-                    pd.DataFrame(si),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-        except Exception:
-            st.info("Short interest data unavailable.")
-
-        st.markdown(
-            '<p class="section-label">Analyst Ratings</p>',
-            unsafe_allow_html=True,
-        )
-        try:
-            ratings = get_analyst_ratings(PORTFOLIO_TICKERS)
-            if ratings:
-                st.dataframe(
-                    pd.DataFrame(ratings),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-        except Exception:
-            st.info("Analyst ratings unavailable.")
-    else:
-        st.markdown(
-            '<div class="amber-box">'
-            "Options, sentiment, short interest, and analyst data require data_engine.py. "
-            "Run it to populate these sections."
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    # Sentiment note (StockTwits unreliable on cloud)
+    st.markdown(
+        '<p class="section-label">Sentiment</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="blue-box">'
+        "For real-time sentiment check "
+        '<a href="https://www.perplexity.ai/search?q=LMT+RTX+XOM+CEG+stock+sentiment+today" '
+        'target="_blank">Perplexity for stock sentiment</a> or visit StockTwits.com directly.'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 # ===========================================================================
 # FOOTER
