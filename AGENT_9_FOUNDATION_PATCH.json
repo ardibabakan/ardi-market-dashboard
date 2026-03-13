@@ -1,0 +1,386 @@
+{
+  "step2_portfolio": {
+    "positions": {
+      "LMT": {
+        "ticker": "LMT",
+        "full_name": "Lockheed Martin Corporation",
+        "description": "Builds fighter jets, missiles, and defense systems for the US military and allies.",
+        "current_price": 649.16,
+        "shares_to_buy": 1,
+        "total_cost": 649.16,
+        "cash_leftover": 600.84,
+        "fidelity_instructions": "Go to Fidelity.com, search LMT, click Buy, select Limit Order, set price to $649.16, enter 1 shares, click Submit"
+      },
+      "RTX": {
+        "ticker": "RTX",
+        "full_name": "RTX Corporation (Raytheon)",
+        "description": "Makes missile defense systems, jet engines, and military electronics.",
+        "current_price": 205.18,
+        "shares_to_buy": 6,
+        "total_cost": 1231.08,
+        "cash_leftover": 18.92,
+        "fidelity_instructions": "Go to Fidelity.com, search RTX, click Buy, select Limit Order, set price to $205.18, enter 6 shares, click Submit"
+      },
+      "LNG": {
+        "ticker": "LNG",
+        "full_name": "Cheniere Energy Inc",
+        "description": "Exports liquefied natural gas from US terminals to countries worldwide.",
+        "current_price": 252.99,
+        "shares_to_buy": 4,
+        "total_cost": 1011.96,
+        "cash_leftover": 238.04,
+        "fidelity_instructions": "Go to Fidelity.com, search LNG, click Buy, select Limit Order, set price to $252.99, enter 4 shares, click Submit"
+      },
+      "GLD": {
+        "ticker": "GLD",
+        "full_name": "SPDR Gold Shares ETF",
+        "description": "An ETF that tracks the price of physical gold \u2014 a safe haven when markets are uncertain.",
+        "current_price": 462.78,
+        "shares_to_buy": 2,
+        "total_cost": 925.56,
+        "cash_leftover": 324.44,
+        "fidelity_instructions": "Go to Fidelity.com, search GLD, click Buy, select Limit Order, set price to $462.78, enter 2 shares, click Submit"
+      },
+      "ITA": {
+        "ticker": "ITA",
+        "full_name": "iShares US Aerospace & Defense ETF",
+        "description": "An ETF that holds a basket of US defense and aerospace stocks.",
+        "current_price": 230.21,
+        "shares_to_buy": 5,
+        "total_cost": 1151.05,
+        "cash_leftover": 98.95,
+        "fidelity_instructions": "Go to Fidelity.com, search ITA, click Buy, select Limit Order, set price to $230.21, enter 5 shares, click Submit"
+      },
+      "XOM": {
+        "ticker": "XOM",
+        "full_name": "Exxon Mobil Corporation",
+        "description": "One of the world's largest oil and gas companies, produces and sells energy globally.",
+        "current_price": 156.34,
+        "shares_to_buy": 7,
+        "total_cost": 1094.38,
+        "cash_leftover": 155.62,
+        "fidelity_instructions": "Go to Fidelity.com, search XOM, click Buy, select Limit Order, set price to $156.34, enter 7 shares, click Submit"
+      },
+      "CEG": {
+        "ticker": "CEG",
+        "full_name": "Constellation Energy Corporation",
+        "description": "The largest US producer of clean nuclear energy and operator of nuclear power plants.",
+        "current_price": 301.62,
+        "shares_to_buy": 4,
+        "total_cost": 1206.48,
+        "cash_leftover": 43.52,
+        "fidelity_instructions": "Go to Fidelity.com, search CEG, click Buy, select Limit Order, set price to $301.62, enter 4 shares, click Submit"
+      },
+      "BAESY": {
+        "ticker": "BAESY",
+        "full_name": "BAE Systems plc ADR",
+        "description": "A British defense company that makes armored vehicles, naval ships, and electronic warfare systems.",
+        "current_price": 123.0,
+        "shares_to_buy": 10,
+        "total_cost": 1230.0,
+        "cash_leftover": 20.0,
+        "fidelity_instructions": "Go to Fidelity.com, search BAESY, click Buy, select Limit Order, set price to $123.00, enter 10 shares, click Submit"
+      },
+      "DAL": {
+        "ticker": "DAL",
+        "full_name": "Delta Air Lines Inc",
+        "description": "A major US airline \u2014 watching for ceasefire signal before buying.",
+        "current_price": 58.25,
+        "status": "WATCHING \u2014 do not buy yet, waiting for ceasefire signal"
+      },
+      "RCL": {
+        "ticker": "RCL",
+        "full_name": "Royal Caribbean Group",
+        "description": "The world's second-largest cruise line company \u2014 watching for ceasefire signal before buying.",
+        "current_price": 269.93,
+        "status": "WATCHING \u2014 do not buy yet, waiting for ceasefire signal"
+      }
+    },
+    "total_spent": 8499.67,
+    "cash_remaining": 1500.33,
+    "cash_reserved_for": "DAL and RCL \u2014 Phase B ceasefire plays"
+  },
+  "step3_earnings": {
+    "LMT": {
+      "next_earnings": "2026-04-21",
+      "days_away": 39,
+      "warning": false,
+      "explanation": "This is the day Lockheed Martin Corporation reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    },
+    "RTX": {
+      "next_earnings": "2026-04-21",
+      "days_away": 39,
+      "warning": false,
+      "explanation": "This is the day RTX Corporation (Raytheon) reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    },
+    "LNG": {
+      "next_earnings": "2026-05-07",
+      "days_away": 55,
+      "warning": false,
+      "explanation": "This is the day Cheniere Energy Inc reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    },
+    "GLD": {
+      "next_earnings": "Not available",
+      "days_away": null
+    },
+    "ITA": {
+      "next_earnings": "Not available",
+      "days_away": null
+    },
+    "XOM": {
+      "next_earnings": "2026-05-01",
+      "days_away": 49,
+      "warning": false,
+      "explanation": "This is the day Exxon Mobil Corporation reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    },
+    "CEG": {
+      "next_earnings": "2026-05-11",
+      "days_away": 59,
+      "warning": false,
+      "explanation": "This is the day Constellation Energy Corporation reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    },
+    "BAESY": {
+      "next_earnings": "2026-02-18",
+      "days_away": -23,
+      "warning": true,
+      "explanation": "This is the day BAE Systems plc ADR reports its profits. The stock can move 5-10% that day. You do not need to sell unless the dashboard tells you to."
+    }
+  },
+  "step4_insider": {
+    "LMT": {
+      "filings_found": 29,
+      "recent_form4s": [
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-27",
+          "form": "4"
+        },
+        {
+          "filer": "LOCKHEED MARTIN CORP",
+          "date": "2026-02-24",
+          "form": "4"
+        }
+      ],
+      "interpretation": "Found 29 Form 4 filing(s) in last 90 days. Review details for buy/sell activity."
+    },
+    "RTX": {
+      "filings_found": 22,
+      "recent_form4s": [
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-23",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-23",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-23",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-23",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        },
+        {
+          "filer": "RTX Corp",
+          "date": "2026-02-13",
+          "form": "4"
+        }
+      ],
+      "interpretation": "Found 22 Form 4 filing(s) in last 90 days. Review details for buy/sell activity."
+    },
+    "XOM": {
+      "filings_found": 20,
+      "recent_form4s": [
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-03-03",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-02-09",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-02-03",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-02-02",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        },
+        {
+          "filer": "EXXON MOBIL CORP",
+          "date": "2026-01-05",
+          "form": "4"
+        }
+      ],
+      "interpretation": "Found 20 Form 4 filing(s) in last 90 days. Review details for buy/sell activity."
+    },
+    "LNG": {
+      "filings_found": 0,
+      "interpretation": "No insider trading (Form 4) found in last 90 days."
+    }
+  },
+  "step5_shipping": {
+    "source": "ZIM stock price (shipping proxy)",
+    "current": 27.08,
+    "30d_start": 22.2,
+    "trend": "up",
+    "plain_english": "Using ZIM (a major shipping company) as a proxy for global shipping rates. ZIM is at $27.08, rising over the last 30 days from $22.2. Rising shipping stocks suggest global trade is active, which is generally good for commodity and energy plays."
+  },
+  "step6_gpr": {
+    "value": 116.7,
+    "date": "2026-02-01 00:00:00",
+    "column_used": "GPR",
+    "plain_english": "Right now global risk is at 116.7. During the Gulf War it was 280. During 9/11 it was 350. We are currently moderately elevated. Normal is around 100."
+  },
+  "step7_crypto": {
+    "bitcoin": {
+      "name": "Bitcoin",
+      "ticker": "BTC",
+      "price_usd": 71111,
+      "change_24h_pct": 1.48,
+      "description": "The original cryptocurrency and digital gold \u2014 the benchmark for the entire crypto market."
+    },
+    "ripple": {
+      "name": "XRP",
+      "ticker": "XRP",
+      "price_usd": 1.4,
+      "change_24h_pct": 1.77,
+      "description": "Ardi's largest crypto holding. Used for fast, cheap cross-border payments between banks and institutions."
+    },
+    "stellar": {
+      "name": "Stellar",
+      "ticker": "XLM",
+      "price_usd": 0.162602,
+      "change_24h_pct": 2.17,
+      "description": "A payment network focused on connecting banks and people in developing countries for low-cost transfers."
+    },
+    "cardano": {
+      "name": "Cardano",
+      "ticker": "ADA",
+      "price_usd": 0.267326,
+      "change_24h_pct": 2.1,
+      "description": "A proof-of-stake blockchain platform focused on sustainability and academic peer-reviewed development."
+    },
+    "hedera-hashgraph": {
+      "name": "Hedera",
+      "ticker": "HBAR",
+      "price_usd": 0.095206,
+      "change_24h_pct": 1.22,
+      "description": "An enterprise-grade distributed ledger backed by Google, IBM, and Boeing for fast, fair transactions."
+    },
+    "market_overview": {
+      "total_market_cap_usd": 2504139773058.556,
+      "total_volume_24h_usd": 141370135498.9518,
+      "btc_dominance": 56.9,
+      "active_cryptocurrencies": 18195
+    }
+  },
+  "metadata": {
+    "agent": "Agent 9 \u2014 Gap Filler",
+    "date": "2026-03-13",
+    "portfolio_size": 10000.0,
+    "broker": "Fidelity",
+    "owner": "Ardi"
+  }
+}

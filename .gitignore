@@ -1,0 +1,5 @@
+runner_log.txt
+runner_errors.txt
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,32 @@
+EXECUTION RULES — READ FIRST:
+- Run all steps automatically without stopping to ask permission
+- Do not ask shall I proceed or is this correct between steps
+- If a step fails try the backup method automatically
+- Only stop if every method for a step has failed
+- Never ask yes or no questions during the run
+- Print progress updates as you go
+- When fully complete print the final status message and stop
+
+# ARDI DAILY MARKET RUNNER
+# Runs every weekday at 3 AM Pacific / 6 AM Eastern
+# Owner: Ardi — Orange County CA
+# Portfolio: $10,000 starting March 13 2026
+# Broker: Fidelity
+# Output folder: MISC/Stock_Market/Daily/
+# Write in plain English throughout — no jargon
+
+Read foundation data from MISC/Stock_Market/AGENT_9_FOUNDATION_PATCH.json
+
+Then execute all daily runner steps:
+1. Pull live prices for portfolio stocks (LMT, RTX, LNG, GLD, ITA, XOM, CEG, BAESY), watchlist (DAL, RCL), and macro indicators (^GSPC, ^VIX, ^VIX3M, CL=F, GC=F, TLT, EEM, ZIM)
+2. Scan 200+ fallen angel universe stocks for 30%+ drops from 52-week highs
+3. Calculate portfolio value vs entry prices from foundation file
+4. Check ceasefire signals (oil drop 3%+, VIX below 20, VIX term structure) and escalation signals (oil spike 10%+, VIX above 40)
+5. Calculate oil war premium vs pre-conflict baseline of $64.56
+6. Check earnings date warnings from foundation file
+7. Evaluate fallen angel opportunities (max 5 strong picks)
+8. Pull crypto prices from CoinGecko and compare to baselines
+9. Determine single clear action for today
+10. Save two files: MISC/Stock_Market/Daily/STOCKS_{today}.md and MISC/Stock_Market/Daily/BROAD_UNIVERSE_{today}.md
+
+Use the exact same format and logic as the previous daily runner output files already in MISC/Stock_Market/Daily/ for reference.
