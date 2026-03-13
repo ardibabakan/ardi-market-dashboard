@@ -96,6 +96,70 @@ WEATHER AND HEALTH:
 - Any major drug or vaccine breakthrough
 
 ============================================================
+SECTION A.5 — TECHNICAL ANALYSIS RUN
+============================================================
+
+For each of the 8 portfolio stocks compute:
+- RSI(14): Below 30=oversold(buy signal), Above 70=overbought(sell signal)
+- MACD(12,26,9): Bullish/bearish crossover detection
+- 50-day and 200-day moving averages: Golden cross / Death cross check
+- Bollinger Bands(20,2): At upper band=overbought, lower band=oversold
+- Volume vs 20-day average: Flag if 2x+ normal volume
+
+Report each stock's overall technical score:
+STRONG / BULLISH / NEUTRAL / BEARISH / WEAK
+
+If death cross detected on any position:
+"TECHNICAL ALERT — DEATH CROSS ON [STOCK]
+ The 50-day average crossed below the 200-day.
+ This is a historically significant bearish signal.
+ Review this position regardless of fundamental thesis."
+
+If golden cross detected:
+"TECHNICAL OPPORTUNITY — GOLDEN CROSS ON [STOCK]
+ Strong buy signal from technical analysis."
+
+============================================================
+SECTION A.6 — SHORT INTEREST AND OPTIONS FLOW
+============================================================
+
+Pull short interest data for all 8 positions from yfinance.
+Flag any with days-to-cover above 5 as SQUEEZE POTENTIAL.
+
+Pull put/call ratio from nearest options expiry for each stock.
+If put/call below 0.5: "BULLISH OPTIONS: Smart money buying calls on [STOCK]"
+If put/call above 1.5: "BEARISH OPTIONS: Smart money buying puts on [STOCK]"
+Flag any unusually large options bets (5x normal volume on single strike).
+
+============================================================
+SECTION A.7 — SOCIAL SENTIMENT
+============================================================
+
+Pull StockTwits sentiment for all 8 positions where available.
+Report bullish/bearish percentage for each.
+
+If any stock shows 70%+ bearish retail sentiment:
+"CONTRARIAN SIGNAL: [STOCK] has extreme bearish sentiment.
+ Historically extreme bearishness precedes rebounds."
+
+If any stock shows 70%+ bullish retail sentiment:
+"CAUTION: [STOCK] has extreme bullish sentiment.
+ Everyone is already bullish — limited upside surprise potential."
+
+============================================================
+SECTION A.8 — PORTFOLIO RISK UPDATE
+============================================================
+
+Calculate portfolio drawdown from starting $10,000.
+If down more than 8% from start:
+"DRAWDOWN ALERT: Portfolio down [X]% from $10,000 start.
+ Approaching uncomfortable levels. Confirm thesis is intact
+ before adding any new positions."
+
+Check defence concentration: LMT+RTX+ITA+BAESY = ~55% of portfolio.
+Note this is intentional but concentrated.
+
+============================================================
 SECTION B — BLACK SWAN DETECTOR
 ============================================================
 

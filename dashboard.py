@@ -1,839 +1,2081 @@
 #!/usr/bin/env python3
 """
-ARDI MARKET DASHBOARD v2.0
-Professional financial dashboard — clean, readable at 5 AM.
-Every number formatted. Every color meaningful.
+Ardi Market Command Center v3.0
+Professional Streamlit Financial Dashboard — 8 tabs, live data, war signals.
 """
 
 import streamlit as st
+import json
+import os
+import sys
+from datetime import datetime, date, timedelta
+
+# ---------------------------------------------------------------------------
+# Data engine import (graceful fallback)
+# ---------------------------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from data_engine import (
+        get_technical_signals,
+        get_crypto_onchain_data,
+        get_options_activity,
+        get_stocktwits_sentiment,
+        get_short_interest,
+        get_analyst_ratings,
+        get_macro_indicators,
+    )
+    ENGINE = True
+except Exception:
+    ENGINE = False
+
+# ---------------------------------------------------------------------------
+# Third-party imports
+# ---------------------------------------------------------------------------
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
-import json, os, glob
-from datetime import datetime, date, timedelta
-import pytz, requests
+import numpy as np
 
-# ─── Page setup ──────────────────────────────────────────────
-st.set_page_config(page_title="Ardi Dashboard", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY = True
+except Exception:
+    PLOTLY = False
 
-st.markdown("""<style>
-.block-container{padding-top:.8rem;padding-bottom:.5rem}
-[data-testid="stMetricValue"]{font-size:1.15rem}
-[data-testid="stMetricDelta"]{font-size:.85rem}
-.stTabs [data-baseweb="tab"]{font-size:.95rem;padding:10px 18px;font-weight:600}
-.card{background:#f8f9fa;border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid #e9ecef}
-.card-red{background:#FCEBEB;border:1px solid #f5c6cb}
-.card-green{background:#EAF3DE;border:1px solid #c3e6cb}
-.card-amber{background:#FAEEDA;border:1px solid #ffeeba}
-.card-blue{background:#E6F1FB;border:1px solid #b8daff}
-.heatbox{border-radius:8px;padding:10px 14px;text-align:center;margin:4px}
-.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;color:white}
-.signal-row{padding:6px 0;border-bottom:1px solid #eee}
-@media(max-width:768px){
-    .block-container{padding-left:.5rem;padding-right:.5rem}
-    h1{font-size:1.4rem!important} h2{font-size:1.1rem!important}
-    [data-testid="stMetricValue"]{font-size:.95rem}
+try:
+    import requests as _requests
+except Exception:
+    _requests = None
+
+# ---------------------------------------------------------------------------
+# Page config & auto-refresh
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Ardi Market Command Center",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown(
+    '<meta http-equiv="refresh" content="3600">',
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Color system & CSS
+# ---------------------------------------------------------------------------
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+.green-box  { background:#EAF3DE; color:#3B6D11; padding:12px 16px; border-radius:8px; margin:4px 0; }
+.red-box    { background:#FCEBEB; color:#A32D2D; padding:12px 16px; border-radius:8px; margin:4px 0; }
+.amber-box  { background:#FAEEDA; color:#633806; padding:12px 16px; border-radius:8px; margin:4px 0; }
+.blue-box   { background:#E6F1FB; color:#185FA5; padding:12px 16px; border-radius:8px; margin:4px 0; }
+.section-label { font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#888;
+                 margin:18px 0 6px 0; font-weight:600; }
+.big-value  { font-size:36px; font-weight:700; margin:0; line-height:1.2; }
+.heat-tile  { display:inline-block; padding:10px 14px; border-radius:6px; margin:3px;
+              text-align:center; font-weight:600; font-size:13px; min-width:70px; }
+.card       { border:1px solid #e0e0e0; border-radius:10px; padding:16px; margin:8px 0; }
+.card-red   { border:1px solid #A32D2D; background:#FDF5F5; border-radius:10px; padding:16px; margin:8px 0; }
+.card-green { border:1px solid #3B6D11; background:#F6FAF0; border-radius:10px; padding:16px; margin:8px 0; }
+.signal-dot-green { display:inline-block; width:12px; height:12px; border-radius:50%;
+                    background:#3B6D11; margin-right:6px; vertical-align:middle; }
+.signal-dot-gray  { display:inline-block; width:12px; height:12px; border-radius:50%;
+                    background:#bbb; margin-right:6px; vertical-align:middle; }
+.signal-dot-amber { display:inline-block; width:12px; height:12px; border-radius:50%;
+                    background:#D4910A; margin-right:6px; vertical-align:middle; }
+@media (max-width:768px) {
+    .big-value { font-size:26px; }
+    .heat-tile { min-width:55px; padding:7px 8px; font-size:11px; }
 }
-</style>""", unsafe_allow_html=True)
+</style>
+"""
+st.markdown(CSS, unsafe_allow_html=True)
 
-# ─── Constants ───────────────────────────────────────────────
-PAC = pytz.timezone("America/Los_Angeles")
-NOW = datetime.now(PAC)
-TODAY = NOW.strftime("%Y-%m-%d")
-TODAY_NICE = NOW.strftime("%A, %B %d, %Y")
-TIME_NICE = NOW.strftime("%I:%M %p Pacific")
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+PORTFOLIO_TICKERS = ["LMT", "RTX", "LNG", "GLD", "ITA", "XOM", "CEG", "BAESY"]
+WATCHLIST_TICKERS = ["DAL", "RCL"]
+ALL_TICKERS = PORTFOLIO_TICKERS + WATCHLIST_TICKERS
+INITIAL_PORTFOLIO = 10000.0
+INVESTED = 8499.67
+CASH = 1500.33
 WAR_START = date(2026, 2, 28)
-WAR_DAYS = max((NOW.date() - WAR_START).days, 0)
-OIL_BASE = 64.56
 ENTRY_DATE = date(2026, 3, 13)
 LTCG_DATE = date(2027, 3, 13)
-LTCG_DAYS = max((LTCG_DATE - NOW.date()).days, 0)
-FOMC = [date(2026,3,18), date(2026,5,6), date(2026,6,17),
-        date(2026,7,29), date(2026,9,16), date(2026,11,4), date(2026,12,16)]
-TICKERS = ["LMT","RTX","LNG","GLD","ITA","XOM","CEG","BAESY"]
-WATCH = ["DAL","RCL"]
+OIL_BASELINE = 64.56
+FOMC_DATES = ["Mar 18", "May 6", "Jun 17", "Jul 29", "Sep 16", "Nov 4", "Dec 16"]
+CRYPTO_IDS = {
+    "bitcoin": {"ticker": "BTC", "baseline": 71111},
+    "ripple": {"ticker": "XRP", "baseline": 1.40},
+    "stellar": {"ticker": "XLM", "baseline": 0.162602},
+    "cardano": {"ticker": "ADA", "baseline": 0.267326},
+    "hedera-hashgraph": {"ticker": "HBAR", "baseline": 0.095206},
+}
+SCAN_UNIVERSE = (
+    "DAL,UAL,AAL,LUV,JBLU,CCL,RCL,NCLH,MAR,HLT,ABNB,"
+    "ZS,CRWD,PANW,FTNT,CYBR,S,NFLX,META,SNAP,PINS,RBLX,COIN,"
+    "BA,GE,MMM,ZIM,SBLK,DAC,TLRY,CGC,NNE,CCJ,UEC,"
+    "FLR,KBR,PWR,MTZ,NVDA,AMD,INTC,QCOM,MU,"
+    "XOM,CVX,COP,OXY,SLB,ORCL,CRM,ADBE,PYPL,UBER,LYFT,HOOD"
+).split(",")
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-DAILY = os.path.join(BASE, "Daily")
-FOUND = os.path.join(BASE, "AGENT_9_FOUNDATION_PATCH.json")
+# ---------------------------------------------------------------------------
+# Load foundation JSON
+# ---------------------------------------------------------------------------
+FOUNDATION_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "AGENT_9_FOUNDATION_PATCH.json",
+)
 
-# ─── Helpers ─────────────────────────────────────────────────
-def fmt(v): return f"${v:,.2f}"
-def pct(v): return f"{'+' if v>=0 else ''}{v:.1f}%"
-def dpct(v): return f"{'+' if v>=0 else ''}${v:,.2f}"
-
-def colored_box(text, style="card"):
-    st.markdown(f'<div class="{style}">{text}</div>', unsafe_allow_html=True)
-
-def heatbox(label, value, color):
-    st.markdown(
-        f'<div class="heatbox" style="background:{color};color:white">'
-        f'<div style="font-weight:700;font-size:15px">{label}</div>'
-        f'<div style="font-size:18px;font-weight:800">{value}</div></div>',
-        unsafe_allow_html=True)
-
-def badge_html(text, bg):
-    return f'<span class="badge" style="background:{bg}">{text}</span>'
 
 @st.cache_data(ttl=3600)
-def load_found():
-    if os.path.exists(FOUND):
-        with open(FOUND) as f: return json.load(f)
-    return None
-
-def load_md(pfx):
-    p = os.path.join(DAILY, f"{pfx}{TODAY}.md")
-    if os.path.exists(p):
-        with open(p) as f: return f.read(), False
-    files = sorted(glob.glob(os.path.join(DAILY, f"{pfx}*.md")), reverse=True)
-    if files:
-        with open(files[0]) as f: return f.read(), True
-    return None, True
-
-@st.cache_data(ttl=3600)
-def prices(tickers, period="1mo"):
-    try: return yf.download(tickers, period=period, progress=False, auto_adjust=True, threads=True)
-    except: return None
-
-@st.cache_data(ttl=3600)
-def price1(ticker):
+def load_foundation():
     try:
-        h = yf.Ticker(ticker).history(period="5d")
-        if len(h)>0: return round(float(h["Close"].iloc[-1]),2)
-    except: pass
-    return None
+        with open(FOUNDATION_PATH, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+FOUNDATION = load_foundation()
+POSITIONS = FOUNDATION.get("step2_portfolio", {}).get("positions", {})
+EARNINGS = FOUNDATION.get("step3_earnings", {})
+CRYPTO_FOUNDATION = FOUNDATION.get("step7_crypto", {})
+
+# ---------------------------------------------------------------------------
+# Helpers: formatting
+# ---------------------------------------------------------------------------
+
+
+def fmt_dollar(v):
+    return f"${v:,.2f}"
+
+
+def fmt_pct(v):
+    sign = "+" if v >= 0 else ""
+    return f"{sign}{v:.1f}%"
+
+
+def color_class(v):
+    if v > 0:
+        return "green-box"
+    elif v < 0:
+        return "red-box"
+    return "blue-box"
+
+
+def _safe_float(val):
+    """Extract a float from a value that might be a Series or scalar."""
+    if isinstance(val, pd.Series):
+        return float(val.iloc[0])
+    return float(val)
+
+
+# ---------------------------------------------------------------------------
+# Data fetching (cached)
+# ---------------------------------------------------------------------------
+
 
 @st.cache_data(ttl=3600)
-def price_pair(ticker):
-    try:
-        h = yf.Ticker(ticker).history(period="5d")
-        if len(h)>=2: return round(float(h["Close"].iloc[-1]),2), round(float(h["Close"].iloc[-2]),2)
-        if len(h)==1: return round(float(h["Close"].iloc[-1]),2), None
-    except: pass
-    return None, None
+def fetch_current_prices(tickers):
+    prices = {}
+    for t in tickers:
+        try:
+            info = yf.Ticker(t).fast_info
+            prices[t] = float(info.get("lastPrice", info.get("last_price", 0)))
+        except Exception:
+            prices[t] = 0.0
+    return prices
+
 
 @st.cache_data(ttl=3600)
-def crypto():
+def fetch_hist(ticker, period="1mo"):
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/simple/price",
-            params={"ids":"bitcoin,ripple,stellar,cardano,hedera-hashgraph",
-                    "vs_currencies":"usd","include_24hr_change":"true"},timeout=10)
-        if r.status_code==200: return r.json()
-    except: pass
-    return None
+        df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+        return df
+    except Exception:
+        return pd.DataFrame()
+
 
 @st.cache_data(ttl=3600)
-def crypto_global():
+def fetch_spy_change():
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/global",timeout=10)
-        if r.status_code==200: return r.json().get("data",{})
-    except: pass
-    return None
+        df = yf.download("SPY", start="2026-03-12", auto_adjust=True, progress=False)
+        if df.empty or len(df) < 2:
+            return 0.0
+        first = _safe_float(df["Close"].iloc[0])
+        last = _safe_float(df["Close"].iloc[-1])
+        return ((last - first) / first) * 100
+    except Exception:
+        return 0.0
+
 
 @st.cache_data(ttl=3600)
-def crypto_fng():
+def fetch_war_indicators():
+    result = {}
+    mapping = {
+        "CL=F": "Oil",
+        "^VIX": "VIX",
+        "GC=F": "Gold",
+        "^GSPC": "S&P 500",
+        "TLT": "TLT",
+    }
+    for sym, name in mapping.items():
+        try:
+            info = yf.Ticker(sym).fast_info
+            result[name] = float(info.get("lastPrice", info.get("last_price", 0)))
+        except Exception:
+            result[name] = 0.0
+    return result
+
+
+@st.cache_data(ttl=3600)
+def fetch_52w_data(tickers):
+    results = {}
+    for t in tickers:
+        try:
+            info = yf.Ticker(t).fast_info
+            high = float(info.get("yearHigh", info.get("year_high", 0)))
+            price = float(info.get("lastPrice", info.get("last_price", 0)))
+            if high > 0:
+                drop_pct = ((price - high) / high) * 100
+                results[t] = {"price": price, "high_52w": high, "drop_pct": drop_pct}
+        except Exception:
+            pass
+    return results
+
+
+@st.cache_data(ttl=3600)
+def fetch_momentum_data(tickers):
+    results = {}
+    for t in tickers:
+        try:
+            info = yf.Ticker(t).fast_info
+            low = float(info.get("yearLow", info.get("year_low", 0)))
+            price = float(info.get("lastPrice", info.get("last_price", 0)))
+            if low > 0:
+                gain_pct = ((price - low) / low) * 100
+                if gain_pct >= 20:
+                    results[t] = {"price": price, "low_52w": low, "gain_pct": gain_pct}
+        except Exception:
+            pass
+    return results
+
+
+@st.cache_data(ttl=3600)
+def fetch_crypto_prices():
+    prices = {}
+    if _requests is None:
+        return prices
+    ids_str = ",".join(CRYPTO_IDS.keys())
     try:
-        r = requests.get("https://api.alternative.me/fng/?limit=1",timeout=10)
-        if r.status_code==200:
-            d = r.json().get("data",[{}])[0]
-            return int(d.get("value",50)), d.get("value_classification","Neutral")
-    except: pass
-    return None, None
+        r = _requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={
+                "ids": ids_str,
+                "vs_currencies": "usd",
+                "include_24hr_change": "true",
+            },
+            timeout=10,
+        )
+        data = r.json()
+        for cid in CRYPTO_IDS:
+            if cid in data:
+                prices[cid] = {
+                    "price": data[cid].get("usd", 0),
+                    "change_24h": data[cid].get("usd_24h_change", 0),
+                }
+    except Exception:
+        pass
+    return prices
 
-def sparkline(series, color="#3498db", h=70):
-    fig = go.Figure(go.Scatter(y=series.values, x=list(range(len(series))),
-        mode="lines", line=dict(color=color,width=2),
-        fill="tozeroy", fillcolor=color.replace(")",",0.08)").replace("rgb","rgba") if "rgb" in color else f"rgba(52,152,219,0.08)"))
-    fig.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=h,
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-    return fig
 
-def next_fomc():
-    for d in FOMC:
-        if d >= NOW.date(): return d, (d-NOW.date()).days
-    return None, None
-
-# ─── Load data ───────────────────────────────────────────────
-fd = load_found()
-if fd is None:
-    st.error("Foundation file missing. Run Agent 9 first.")
-    st.stop()
-
-pos = fd["step2_portfolio"]["positions"]
-cash = fd["step2_portfolio"]["cash_remaining"]
-earn = fd["step3_earnings"]
-cbase = fd["step7_crypto"]
-
-emap = {}
-for t in TICKERS:
-    p = pos[t]
-    emap[t] = dict(entry=p["current_price"], shares=p["shares_to_buy"],
-        cost=p["total_cost"], name=p["full_name"], desc=p["description"],
-        sl=round(p["current_price"]*0.85,2), pt=round(p["current_price"]*1.25,2))
-
-# Live prices
-hdata = prices(TICKERS+WATCH, "1mo")
-live = {}
-for t in TICKERS+WATCH:
+@st.cache_data(ttl=3600)
+def fetch_fear_greed():
+    if _requests is None:
+        return {"value": "N/A", "label": "N/A"}
     try:
-        if hdata is not None and isinstance(hdata.columns, pd.MultiIndex):
-            c = hdata["Close"][t].dropna()
-        elif hdata is not None:
-            c = hdata["Close"].dropna()
-        else: c = pd.Series()
-        live[t] = {"p": round(float(c.iloc[-1]),2), "s": c} if len(c)>0 else {"p": emap.get(t,{}).get("entry",0), "s": pd.Series()}
-    except:
-        live[t] = {"p": emap.get(t,{}).get("entry",0), "s": pd.Series()}
+        r = _requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
+        d = r.json()["data"][0]
+        return {"value": d["value"], "label": d["value_classification"]}
+    except Exception:
+        return {"value": "N/A", "label": "N/A"}
 
-# Macro
-vix, _ = price_pair("^VIX")
-vix3m = price1("^VIX3M")
-oil, oil_prev = price_pair("CL=F")
-sp = price1("^GSPC")
-tlt = price1("TLT")
-gold = price1("GC=F")
 
-# Portfolio calc
-tot_entry = sum(emap[t]["cost"] for t in TICKERS)
-tot_now = sum(live[t]["p"]*emap[t]["shares"] for t in TICKERS)
-tot_gl = tot_now - tot_entry
-tot_pct = (tot_gl/tot_entry*100) if tot_entry>0 else 0
-port_val = tot_now + cash
+@st.cache_data(ttl=3600)
+def fetch_crypto_global():
+    if _requests is None:
+        return {}
+    try:
+        r = _requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        data = r.json().get("data", {})
+        return {
+            "market_cap": data.get("total_market_cap", {}).get("usd", 0),
+            "btc_dominance": data.get("market_cap_percentage", {}).get("btc", 0),
+        }
+    except Exception:
+        return {}
 
-# Signals
-oil_chg = ((oil-oil_prev)/oil_prev*100) if oil and oil_prev and oil_prev>0 else 0
-cf_sigs, cf_fired = [], 0
-if oil and oil_prev and oil_prev>0:
-    f = oil_chg<=-3
-    cf_sigs.append(("Oil dropped 3%+ in one day", f, f"Oil {oil_chg:+.1f}% today"))
-    if f: cf_fired+=1
-else: cf_sigs.append(("Oil dropped 3%+ in one day", False, "Unavailable"))
 
-if vix is not None:
-    f = vix<20
-    cf_sigs.append(("VIX below 20", f, f"VIX at {vix:.1f}"))
-    if f: cf_fired+=1
-else: cf_sigs.append(("VIX below 20", False, "Unavailable"))
+# ---------------------------------------------------------------------------
+# Compute portfolio values
+# ---------------------------------------------------------------------------
+current_prices = fetch_current_prices(ALL_TICKERS)
 
-if vix and vix3m:
-    f = vix>vix3m
-    cf_sigs.append(("VIX backwardation", f, f"VIX {vix:.1f} vs VIX3M {vix3m:.1f}"))
-    if f: cf_fired+=1
-else: cf_sigs.append(("VIX backwardation", False, "Unavailable"))
+portfolio_value = CASH
+position_data = {}
+for _t in PORTFOLIO_TICKERS:
+    _pos = POSITIONS.get(_t, {})
+    _entry_price = _pos.get("current_price", 0)
+    _shares = _pos.get("shares_to_buy", 0)
+    _cost_basis = _pos.get("total_cost", 0)
+    _cur_price = current_prices.get(_t, _entry_price)
+    _cur_value = _cur_price * _shares
+    _pnl = _cur_value - _cost_basis
+    _pnl_pct = (_pnl / _cost_basis * 100) if _cost_basis else 0
+    _stop_loss = _entry_price * 0.85
+    _profit_target = _entry_price * 1.25
+    portfolio_value += _cur_value
+    position_data[_t] = {
+        "name": _pos.get("full_name", _t),
+        "description": _pos.get("description", ""),
+        "entry": _entry_price,
+        "current": _cur_price,
+        "shares": _shares,
+        "cost": _cost_basis,
+        "value": _cur_value,
+        "pnl": _pnl,
+        "pnl_pct": _pnl_pct,
+        "stop_loss": _stop_loss,
+        "profit_target": _profit_target,
+        "earnings": EARNINGS.get(_t, {}).get("next_earnings", "N/A"),
+    }
 
-cf_sigs += [("Iranian FM peace language", None, "Manual check"),
-            ("Mediator country announced", None, "Manual check"),
-            ("Trump peace statement", None, "Manual check")]
+total_change = portfolio_value - INITIAL_PORTFOLIO
+total_change_pct = (total_change / INITIAL_PORTFOLIO) * 100
+spy_change = fetch_spy_change()
 
-esc_sigs, esc_fired = [], 0
-if oil and oil_prev and oil_prev>0:
-    f = oil_chg>=10
-    esc_sigs.append(("Oil spiked 10%+", f, f"Oil {oil_chg:+.1f}%"))
-    if f: esc_fired+=1
-else: esc_sigs.append(("Oil spiked 10%+", False, "Unavailable"))
-if vix is not None:
-    f = vix>40
-    esc_sigs.append(("VIX above 40", f, f"VIX {vix:.1f}"))
-    if f: esc_fired+=1
-else: esc_sigs.append(("VIX above 40", False, "Unavailable"))
-esc_sigs += [("Iran nuclear announcement", None, "Manual check"),
-             ("China-Taiwan escalation", None, "Manual check"),
-             ("US carrier attacked", None, "Manual check")]
+today = date.today()
+conflict_day = (today - WAR_START).days
 
-# Action
-dc, stale = load_md("STOCKS_")
-act = "HOLD EVERYTHING. No trades needed today."
-act_color = "#27ae60"
-if dc:
-    for line in dc.split("\n"):
-        if "TODAY'S ACTION" in line.upper():
-            idx = dc.index(line)
-            for nl in dc[idx:].split("\n")[1:5]:
-                s = nl.strip().strip("#").strip()
-                if s and len(s)>10: act=s; break
-            break
-for kw,c in [("BLACK SWAN","#c0392b"),("DANGER","#c0392b"),("DO NOT TRADE","#c0392b"),
-             ("STOP LOSS","#c0392b"),("BUY","#2980b9"),("OPPORTUNITY","#2980b9"),
-             ("REVIEW","#e67e22"),("WARNING","#e67e22"),("EARNINGS","#e67e22")]:
-    if kw in act.upper(): act_color=c; break
+# ---------------------------------------------------------------------------
+# HEADER (always visible)
+# ---------------------------------------------------------------------------
+now = datetime.now()
+greeting = (
+    "Good morning"
+    if now.hour < 12
+    else ("Good afternoon" if now.hour < 17 else "Good evening")
+)
 
-# Alerts
-alerts = []
-for t in TICKERS:
-    e=emap[t]; cp=live[t]["p"]
-    if cp<=e["sl"]: alerts.append(("SL",t,e,cp))
-    elif cp>=e["pt"]: alerts.append(("PT",t,e,cp))
+st.markdown(
+    '<p class="section-label">'
+    + greeting
+    + " Ardi &mdash; "
+    + now.strftime("%A, %B %d, %Y")
+    + " &middot; "
+    + now.strftime("%I:%M %p")
+    + "</p>",
+    unsafe_allow_html=True,
+)
 
-# ═════════════════════════════════════════════════════════════
-# RENDER
-# ═════════════════════════════════════════════════════════════
+pv_color = "#3B6D11" if portfolio_value >= INITIAL_PORTFOLIO else "#A32D2D"
+st.markdown(
+    '<p class="big-value" style="color:'
+    + pv_color
+    + '">'
+    + fmt_dollar(portfolio_value)
+    + "</p>",
+    unsafe_allow_html=True,
+)
 
-# Refresh
-c1,c2 = st.columns([9,1])
-with c2:
-    if st.button("Refresh"): st.cache_data.clear(); st.rerun()
-st.markdown('<meta http-equiv="refresh" content="3600">', unsafe_allow_html=True)
+chg_cls = color_class(total_change)
+st.markdown(
+    '<div class="'
+    + chg_cls
+    + '">Change: '
+    + fmt_dollar(total_change)
+    + " ("
+    + fmt_pct(total_change_pct)
+    + ") since March 13 &nbsp;|&nbsp; Invested: "
+    + fmt_dollar(INVESTED)
+    + " &middot; Cash: "
+    + fmt_dollar(CASH)
+    + "</div>",
+    unsafe_allow_html=True,
+)
 
-# ── HEADER ───────────────────────────────────────────────────
-st.markdown(f'<div style="font-size:18px;font-weight:500;margin-bottom:2px">Good morning Ardi</div>', unsafe_allow_html=True)
-st.markdown(f'<div style="font-size:12px;color:#888;margin-bottom:12px">'
-    f'{TODAY_NICE} &middot; {TIME_NICE} &middot; Data updated daily at 3 AM</div>', unsafe_allow_html=True)
+# vs S&P
+alpha = total_change_pct - spy_change
+alpha_cls = color_class(alpha)
+st.markdown(
+    '<div class="'
+    + alpha_cls
+    + '">vs S&P 500: Portfolio '
+    + fmt_pct(total_change_pct)
+    + " | S&P "
+    + fmt_pct(spy_change)
+    + " | Alpha: "
+    + fmt_pct(alpha)
+    + "</div>",
+    unsafe_allow_html=True,
+)
 
-if stale:
-    st.info("Today's report not ready yet. Showing most recent data.")
-
-# Row 2: Portfolio | vs S&P | Conflict
-h1, h2, h3 = st.columns([4,4,3])
-with h1:
-    pcolor = "#3B6D11" if tot_gl>=0 else "#A32D2D"
-    st.markdown(f'<div style="font-size:36px;font-weight:800;color:{pcolor};line-height:1.1">{fmt(port_val)}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:14px;color:{pcolor};margin-top:2px">{dpct(tot_gl)} ({pct(tot_pct)}) since March 13</div>', unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:12px;color:#888;margin-top:4px">Invested: {fmt(tot_entry)} &middot; Cash: {fmt(cash)}</div>', unsafe_allow_html=True)
-
-with h2:
-    if sp:
-        sp_base = 5900
-        sp_pct = ((sp-sp_base)/sp_base)*100
-        diff = tot_pct - sp_pct
-        vc = "#3B6D11" if diff>=0 else "#A32D2D"
-        word = "outperforming" if diff>=0 else "underperforming"
-        st.markdown(f'<div style="font-size:14px;margin-top:8px"><b>vs S&P 500:</b></div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:13px">Your portfolio {pct(tot_pct)} vs S&P {pct(sp_pct)}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:15px;font-weight:700;color:{vc}">{word.title()} by {abs(diff):.1f}%</div>', unsafe_allow_html=True)
-    else:
-        st.caption("S&P 500 data unavailable")
-
-with h3:
-    if WAR_DAYS<21: pc,ptxt="#e67e22",f"Day {WAR_DAYS} &middot; Bottom window: Day 21"
-    elif WAR_DAYS<=42: pc,ptxt="#27ae60",f"Day {WAR_DAYS} &middot; Past bottom, recovery"
-    else: pc,ptxt="#2980b9",f"Day {WAR_DAYS} &middot; Extended conflict"
-    st.markdown(f'<div style="background:{pc};color:white;padding:12px 16px;border-radius:10px;'
-        f'text-align:center;margin-top:6px"><div style="font-weight:700;font-size:14px">Iran Conflict</div>'
-        f'<div style="font-size:12px;margin-top:2px">{ptxt}</div></div>', unsafe_allow_html=True)
+# Conflict phase badge
+if conflict_day < 21:
+    badge_cls = "amber-box"
+    phase_label = "Conflict Day " + str(conflict_day) + " &mdash; Early Phase (hold defense)"
+elif conflict_day <= 42:
+    badge_cls = "green-box"
+    phase_label = "Conflict Day " + str(conflict_day) + " &mdash; Ceasefire Window (watch signals)"
+else:
+    badge_cls = "blue-box"
+    phase_label = "Conflict Day " + str(conflict_day) + " &mdash; Extended Phase (reassess thesis)"
+st.markdown(
+    '<div class="' + badge_cls + '">' + phase_label + "</div>",
+    unsafe_allow_html=True,
+)
 
 # Action box
-st.markdown(f'<div style="background:{act_color};color:white;padding:14px 20px;border-radius:10px;'
-    f'font-size:16px;margin:10px 0 16px 0"><b>TODAY\'S ACTION:</b> {act}</div>', unsafe_allow_html=True)
+stop_hit = [t for t, d in position_data.items() if d["current"] <= d["stop_loss"]]
+target_hit = [t for t, d in position_data.items() if d["current"] >= d["profit_target"]]
 
-# Stop loss / profit alerts
-for at,tk,ed,cp in alerts:
-    if at=="SL":
-        st.markdown(f'<div class="card-red" style="border-radius:10px;padding:14px 18px;margin-bottom:8px">'
-            f'<b style="color:#A32D2D;font-size:16px">STOP LOSS HIT — {tk}</b><br>'
-            f'<span style="font-size:13px">Price: {fmt(cp)} &middot; Stop: {fmt(ed["sl"])} &middot; Entry: {fmt(ed["entry"])}<br>'
-            f'Fidelity: Search {tk} &rarr; Sell &rarr; Market Order &rarr; {ed["shares"]} shares &rarr; Submit</span></div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="card-green" style="border-radius:10px;padding:14px 18px;margin-bottom:8px">'
-            f'<b style="color:#3B6D11;font-size:16px">PROFIT TARGET — {tk}</b><br>'
-            f'<span style="font-size:13px">Price: {fmt(cp)} &middot; Target: {fmt(ed["pt"])} &middot; Entry: {fmt(ed["entry"])}<br>'
-            f'Consider selling half ({ed["shares"]//2} shares) on Fidelity to lock in gains.</span></div>', unsafe_allow_html=True)
+if stop_hit:
+    action_cls = "red-box"
+    action_msg = (
+        "STOP LOSS TRIGGERED: "
+        + ", ".join(stop_hit)
+        + " &mdash; Review positions immediately"
+    )
+elif target_hit:
+    action_cls = "green-box"
+    action_msg = (
+        "PROFIT TARGET HIT: "
+        + ", ".join(target_hit)
+        + " &mdash; Consider taking profits"
+    )
+elif 21 <= conflict_day <= 42:
+    action_cls = "blue-box"
+    action_msg = "Ceasefire window open &mdash; Watch for DAL/RCL entry opportunity"
+else:
+    action_cls = "green-box"
+    action_msg = "HOLD &mdash; All positions within range. No action required."
+st.markdown(
+    '<div class="' + action_cls + '">' + action_msg + "</div>",
+    unsafe_allow_html=True,
+)
 
-# Data freshness bar
-st.markdown(f'<div style="font-size:11px;color:#aaa;margin-bottom:8px">'
-    f'Live prices via yfinance &middot; Crypto via CoinGecko &middot; '
-    f'Next full report: tomorrow 3 AM Pacific</div>', unsafe_allow_html=True)
+for _t in stop_hit:
+    st.markdown(
+        '<div class="red-box">ALERT: '
+        + _t
+        + " at "
+        + fmt_dollar(position_data[_t]["current"])
+        + " below stop loss "
+        + fmt_dollar(position_data[_t]["stop_loss"])
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+for _t in target_hit:
+    st.markdown(
+        '<div class="green-box">ALERT: '
+        + _t
+        + " at "
+        + fmt_dollar(position_data[_t]["current"])
+        + " above profit target "
+        + fmt_dollar(position_data[_t]["profit_target"])
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
-# ── TABS ─────────────────────────────────────────────────────
-tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs(["My Stocks","War Signals","Opportunities","Momentum","My Crypto","World Events"])
+st.markdown("---")
 
-# ═════════════════════════════════════════════════════════════
-# TAB 1 — MY STOCKS
-# ═════════════════════════════════════════════════════════════
+# ===========================================================================
+# TABS
+# ===========================================================================
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
+    [
+        "My Stocks",
+        "Technical Analysis",
+        "War Signals",
+        "Opportunities",
+        "Momentum",
+        "My Crypto",
+        "World Events",
+        "Risk Dashboard",
+    ]
+)
+
+# ===========================================================================
+# TAB 1 - My Stocks
+# ===========================================================================
 with tab1:
-    # Heat map
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:6px">Portfolio at a glance</div>', unsafe_allow_html=True)
-    hcols = st.columns(4)
-    for i,t in enumerate(TICKERS):
-        e=emap[t]; cp=live[t]["p"]
-        gl_pct = round((cp-e["entry"])/e["entry"]*100,1) if e["entry"]>0 else 0
-        bg = "#EAF3DE" if gl_pct>=0 else "#FCEBEB"
-        tc = "#3B6D11" if gl_pct>=0 else "#A32D2D"
-        with hcols[i%4]:
-            st.markdown(f'<div class="heatbox" style="background:{bg}">'
-                f'<div style="font-weight:700;font-size:14px;color:#333">{t}</div>'
-                f'<div style="font-size:20px;font-weight:800;color:{tc}">{pct(gl_pct)}</div>'
-                f'<div style="font-size:11px;color:#888">{fmt(cp)}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-label">Today\'s Heat Map</p>', unsafe_allow_html=True
+    )
 
-    st.markdown("---")
+    # Heat map tiles
+    tiles_html = ""
+    for _t in PORTFOLIO_TICKERS:
+        _d = position_data[_t]
+        day_chg_pct = _d["pnl_pct"]
+        try:
+            _hist = fetch_hist(_t, period="2d")
+            if len(_hist) >= 2:
+                _prev = _safe_float(_hist["Close"].iloc[-2])
+                _cur = _safe_float(_hist["Close"].iloc[-1])
+                day_chg_pct = ((_cur - _prev) / _prev) * 100 if _prev else 0
+        except Exception:
+            pass
+        bg = "#EAF3DE" if day_chg_pct >= 0 else "#FCEBEB"
+        fg = "#3B6D11" if day_chg_pct >= 0 else "#A32D2D"
+        tiles_html += (
+            '<span class="heat-tile" style="background:'
+            + bg
+            + ";color:"
+            + fg
+            + '">'
+            + _t
+            + "<br>"
+            + fmt_pct(day_chg_pct)
+            + "</span>"
+        )
+    st.markdown(tiles_html, unsafe_allow_html=True)
 
-    # Two columns: stocks | allocation+calendar
-    left_col, right_col = st.columns([6,4])
+    # Two columns
+    left_col, right_col = st.columns([3, 2])
 
     with left_col:
-        st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Your 8 positions</div>', unsafe_allow_html=True)
-
-        for t in TICKERS:
-            e=emap[t]; cp=live[t]["p"]
-            gl_d = round(cp*e["shares"]-e["cost"],2)
-            gl_p = round((gl_d/e["cost"])*100,1) if e["cost"]>0 else 0
-
-            # Card style
-            card_cls = "card"
-            if cp<=e["sl"]: card_cls="card-red"
-            elif cp>=e["pt"]: card_cls="card-green"
-
-            badge_t,badge_c = "HOLD","#27ae60"
-            if cp<=e["sl"]: badge_t,badge_c="STOP LOSS","#c0392b"
-            elif cp>=e["pt"]: badge_t,badge_c="TAKE PROFIT","#f39c12"
-            elif gl_p<=-15: badge_t,badge_c="REVIEW","#e74c3c"
-            elif gl_p<=-10: badge_t,badge_c="MONITOR","#e67e22"
-            elif gl_p>=20: badge_t,badge_c="STRONG","#2ecc71"
-
-            pl_color = "#3B6D11" if gl_d>=0 else "#A32D2D"
-
-            st.markdown(f'<div class="{card_cls}" style="border-radius:10px;padding:16px">'
-                f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                f'<div><span style="font-size:16px;font-weight:700">{t}</span> '
-                f'<span style="font-size:12px;color:#888">{e["name"]}</span></div>'
-                f'{badge_html(badge_t,badge_c)}</div>'
-                f'<div style="display:flex;gap:24px;margin-top:10px">'
-                f'<div><div style="font-size:11px;color:#888">You paid</div><div style="font-size:15px;font-weight:600">{fmt(e["entry"])}</div></div>'
-                f'<div><div style="font-size:11px;color:#888">Now</div><div style="font-size:15px;font-weight:600">{fmt(cp)}</div></div>'
-                f'<div><div style="font-size:11px;color:#888">Your P&L</div>'
-                f'<div style="font-size:15px;font-weight:700;color:{pl_color}">{dpct(gl_d)} ({pct(gl_p)})</div></div></div>'
-                f'<div style="font-size:11px;color:#999;margin-top:8px">'
-                f'Stop: {fmt(e["sl"])} &middot; Target: {fmt(e["pt"])} &middot; '
-                f'{e["shares"]} share{"s" if e["shares"]!=1 else ""}</div>'
-                f'</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="section-label">Portfolio Holdings</p>',
+            unsafe_allow_html=True,
+        )
+        for _t in PORTFOLIO_TICKERS:
+            _d = position_data[_t]
+            sl_hit = _d["current"] <= _d["stop_loss"]
+            pt_hit = _d["current"] >= _d["profit_target"]
+            card_cls = (
+                "card-red" if sl_hit else ("card-green" if pt_hit else "card")
+            )
+            pnl_color = "#3B6D11" if _d["pnl"] >= 0 else "#A32D2D"
 
             # Sparkline
-            series = live[t].get("s", pd.Series())
-            if len(series)>3:
-                lc = "#3B6D11" if gl_d>=0 else "#A32D2D"
-                st.plotly_chart(sparkline(series, lc, 55), use_container_width=True, key=f"sp_{t}")
-
-            # Earnings
-            ed = earn.get(t,{}).get("next_earnings")
-            if ed and ed not in ["Not available","Error"]:
+            if PLOTLY:
                 try:
-                    edt = datetime.strptime(ed,"%Y-%m-%d").date()
-                    dys = (edt-NOW.date()).days
-                    if 0<dys<=7: st.markdown(f'<div class="card-red" style="padding:8px 12px;border-radius:6px;font-size:12px"><b>URGENT:</b> Earnings in {dys} days ({ed})</div>', unsafe_allow_html=True)
-                    elif 0<dys<=21: st.markdown(f'<div class="card-amber" style="padding:8px 12px;border-radius:6px;font-size:12px">Earnings in {dys} days ({ed})</div>', unsafe_allow_html=True)
-                    elif dys>0: st.caption(f"Earnings: {ed} ({dys} days)")
-                    else: st.caption(f"Last reported: {ed}")
-                except: pass
+                    _hist = fetch_hist(_t, period="1mo")
+                    if not _hist.empty:
+                        close_vals = _hist["Close"].values.flatten().tolist()
+                        _fig = go.Figure(
+                            go.Scatter(
+                                y=close_vals,
+                                mode="lines",
+                                line=dict(
+                                    color=(
+                                        "#3B6D11"
+                                        if _d["pnl"] >= 0
+                                        else "#A32D2D"
+                                    ),
+                                    width=2,
+                                ),
+                            )
+                        )
+                        _fig.update_layout(
+                            height=60,
+                            margin=dict(l=0, r=0, t=0, b=0),
+                            xaxis=dict(visible=False),
+                            yaxis=dict(visible=False),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                        )
+                        st.plotly_chart(
+                            _fig, use_container_width=True, key="spark_" + _t
+                        )
+                except Exception:
+                    pass
 
-        # Watchlist
-        st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin:16px 0 8px 0">Waiting to buy (Phase B)</div>', unsafe_allow_html=True)
-        for t in WATCH:
-            p=pos.get(t,{}); cp=live[t]["p"]
-            st.markdown(f'<div class="card-blue" style="border-radius:10px;padding:14px">'
-                f'<b>{t}</b> — {p.get("full_name",t)}<br>'
-                f'<span style="font-size:18px;font-weight:700">{fmt(cp)}</span><br>'
-                f'<span style="font-size:12px;color:#555">Buy when 2+ ceasefire signals fire ({cf_fired}/6 now)</span></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="'
+                + card_cls
+                + '"><strong>'
+                + _t
+                + "</strong> &mdash; "
+                + _d["name"]
+                + "<br>"
+                + '<small style="color:#888">'
+                + _d["description"]
+                + "</small><br>"
+                + "Entry: "
+                + fmt_dollar(_d["entry"])
+                + " &middot; Current: "
+                + fmt_dollar(_d["current"])
+                + " &middot; Shares: "
+                + str(_d["shares"])
+                + "<br>"
+                + '<span style="color:'
+                + pnl_color
+                + ';font-weight:600">P&L: '
+                + fmt_dollar(_d["pnl"])
+                + " ("
+                + fmt_pct(_d["pnl_pct"])
+                + ")</span><br>"
+                + "Stop Loss: "
+                + fmt_dollar(_d["stop_loss"])
+                + " &middot; Target: "
+                + fmt_dollar(_d["profit_target"])
+                + "<br>"
+                + "Earnings: "
+                + _d["earnings"]
+                + "</div>",
+                unsafe_allow_html=True,
+            )
 
     with right_col:
-        # Allocation chart
-        st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">How your $10,000 is split</div>', unsafe_allow_html=True)
-        cats = {"LMT":"Defence","RTX":"Defence","ITA":"Defence","BAESY":"Defence",
-                "LNG":"Energy","XOM":"Energy","GLD":"Safe Haven","CEG":"Nuclear"}
-        colors = {"Defence":"#2980b9","Energy":"#27ae60","Safe Haven":"#f39c12","Nuclear":"#8e44ad","Cash":"#95a5a6"}
-        alloc = {}
-        for t in TICKERS:
-            cat = cats[t]
-            alloc[cat] = alloc.get(cat,0) + emap[t]["cost"]
-        alloc["Cash Reserve"] = cash
-        labels = list(alloc.keys())
-        values = list(alloc.values())
-        bar_colors = [colors.get(l,"#95a5a6") for l in labels]
-
-        fig = go.Figure(go.Bar(y=labels, x=values, orientation="h",
-            marker_color=bar_colors, text=[f"{fmt(v)} ({v/10000*100:.0f}%)" for v in values],
-            textposition="inside", textfont=dict(color="white",size=12)))
-        fig.update_layout(height=220, margin=dict(l=0,r=0,t=0,b=0),
-            xaxis=dict(visible=False), yaxis=dict(autorange="reversed"),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown(
+            '<p class="section-label">Allocation</p>', unsafe_allow_html=True
+        )
+        if PLOTLY:
+            labels = list(PORTFOLIO_TICKERS) + ["Cash"]
+            values = [position_data[t]["value"] for t in PORTFOLIO_TICKERS] + [
+                CASH
+            ]
+            _fig = px.pie(names=labels, values=values, hole=0.4)
+            _fig.update_traces(textinfo="label+percent", textfont_size=11)
+            _fig.update_layout(
+                height=350,
+                margin=dict(l=0, r=0, t=20, b=0),
+                showlegend=False,
+            )
+            st.plotly_chart(_fig, use_container_width=True)
+        else:
+            for _t in PORTFOLIO_TICKERS:
+                alloc = position_data[_t]["value"] / portfolio_value * 100
+                st.write(_t + ": " + str(round(alloc, 1)) + "%")
 
         # Economic calendar
-        st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin:16px 0 8px 0">Economic calendar</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="section-label">Upcoming Events</p>',
+            unsafe_allow_html=True,
+        )
+        for _t in PORTFOLIO_TICKERS:
+            earn = EARNINGS.get(_t, {}).get("next_earnings", "N/A")
+            if earn not in ("N/A", "Not available"):
+                st.markdown(
+                    '<div class="blue-box">'
+                    + _t
+                    + " Earnings: "
+                    + earn
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+        st.markdown(
+            '<div class="amber-box">Next FOMC: '
+            + FOMC_DATES[0]
+            + " 2026</div>",
+            unsafe_allow_html=True,
+        )
 
-        events = []
-        # FOMC
-        fd_d, fd_dy = next_fomc()
-        if fd_d: events.append((fd_d, fd_dy, "Fed Meeting (FOMC)", "HIGH"))
-        # Earnings
-        for t in TICKERS:
-            ed = earn.get(t,{}).get("next_earnings")
-            if ed and ed not in ["Not available","Error"]:
-                try:
-                    edt=datetime.strptime(ed,"%Y-%m-%d").date()
-                    dys=(edt-NOW.date()).days
-                    if dys>0: events.append((edt, dys, f"{t} Earnings", "HIGH" if dys<=14 else "MEDIUM"))
-                except: pass
-        # Tax
-        events.append((LTCG_DATE, LTCG_DAYS, "Long-term tax qualification", "MEDIUM"))
+    # Watchlist
+    st.markdown(
+        '<p class="section-label">Watchlist (Ceasefire Plays)</p>',
+        unsafe_allow_html=True,
+    )
+    wl_cols = st.columns(2)
+    for i, _t in enumerate(WATCHLIST_TICKERS):
+        _pos = POSITIONS.get(_t, {})
+        _cur = current_prices.get(_t, _pos.get("current_price", 0))
+        _entry_watch = _pos.get("current_price", 0)
+        _chg = (
+            ((_cur - _entry_watch) / _entry_watch * 100)
+            if _entry_watch
+            else 0
+        )
+        _cls = color_class(_chg)
+        with wl_cols[i]:
+            st.markdown(
+                '<div class="'
+                + _cls
+                + '"><strong>'
+                + _t
+                + "</strong> &mdash; "
+                + _pos.get("full_name", _t)
+                + "<br>Baseline: "
+                + fmt_dollar(_entry_watch)
+                + " &middot; Now: "
+                + fmt_dollar(_cur)
+                + " &middot; "
+                + fmt_pct(_chg)
+                + "<br><small>"
+                + _pos.get("description", "")
+                + "</small></div>",
+                unsafe_allow_html=True,
+            )
 
-        events.sort(key=lambda x:x[1])
-        for ed,dy,name,imp in events[:8]:
-            ic = {"HIGH":"#c0392b","MEDIUM":"#e67e22","LOW":"#95a5a6"}.get(imp,"#95a5a6")
-            st.markdown(f'<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #eee">'
-                f'<span class="badge" style="background:{ic};font-size:10px;margin-right:8px">{imp}</span>'
-                f'<span style="font-size:13px"><b>{name}</b> — {ed} ({dy}d)</span></div>', unsafe_allow_html=True)
-
-    # Portfolio vs S&P chart
-    st.markdown("---")
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:6px">Portfolio value over time</div>', unsafe_allow_html=True)
-    if hdata is not None:
+    # Portfolio chart
+    st.markdown(
+        '<p class="section-label">Portfolio Value Over Time</p>',
+        unsafe_allow_html=True,
+    )
+    if PLOTLY:
         try:
-            ps = None
-            for t in TICKERS:
-                sh = emap[t]["shares"]
-                s = hdata["Close"][t].dropna()*sh if isinstance(hdata.columns,pd.MultiIndex) else hdata["Close"].dropna()*sh
-                ps = s if ps is None else ps.add(s, fill_value=0)
-            if ps is not None:
-                ps = ps + cash
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=ps.index, y=ps.values, mode="lines", name="Your Portfolio",
-                    line=dict(color="#2980b9",width=2.5)))
-                fig.add_hline(y=10000, line_dash="dash", line_color="#ccc", annotation_text="$10,000 start")
-                fig.update_layout(height=250, margin=dict(l=0,r=0,t=20,b=0),
-                    yaxis_title="Value ($)", legend=dict(orientation="h",y=1.12),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig, use_container_width=True)
-        except: st.caption("Chart unavailable")
+            tickers_str = " ".join(PORTFOLIO_TICKERS)
+            hist_all = yf.download(
+                tickers_str,
+                start="2026-03-12",
+                auto_adjust=True,
+                progress=False,
+            )
+            if not hist_all.empty and "Close" in hist_all.columns:
+                close_df = hist_all["Close"]
+                port_vals = []
+                for idx in close_df.index:
+                    row = close_df.loc[idx]
+                    day_val = CASH
+                    for _t in PORTFOLIO_TICKERS:
+                        _shares = POSITIONS.get(_t, {}).get("shares_to_buy", 0)
+                        try:
+                            price_val = (
+                                float(row[_t])
+                                if isinstance(row, pd.Series)
+                                else float(row)
+                            )
+                        except Exception:
+                            price_val = 0
+                        if pd.notna(price_val):
+                            day_val += price_val * _shares
+                    port_vals.append({"date": idx, "value": day_val})
+                if port_vals:
+                    pv_df = pd.DataFrame(port_vals)
+                    _fig = go.Figure(
+                        go.Scatter(
+                            x=pv_df["date"],
+                            y=pv_df["value"],
+                            mode="lines+markers",
+                            line=dict(color="#3B6D11", width=2),
+                        )
+                    )
+                    _fig.add_hline(
+                        y=INITIAL_PORTFOLIO,
+                        line_dash="dash",
+                        line_color="#A32D2D",
+                        annotation_text="$10,000 baseline",
+                    )
+                    _fig.update_layout(
+                        height=300,
+                        margin=dict(l=0, r=0, t=20, b=0),
+                        yaxis_title="Portfolio Value ($)",
+                    )
+                    st.plotly_chart(_fig, use_container_width=True)
+        except Exception:
+            st.info("Portfolio chart data loading...")
 
-    st.caption(f"Tax: Hold until March 13, 2027 ({LTCG_DAYS} days) for lower capital gains rate.")
+    # Tax note
+    days_to_ltcg = (LTCG_DATE - today).days
+    st.markdown(
+        '<div class="amber-box">Hold until March 13, 2027 for long-term capital gains ('
+        + str(days_to_ltcg)
+        + " days remaining)</div>",
+        unsafe_allow_html=True,
+    )
 
-# ═════════════════════════════════════════════════════════════
-# TAB 2 — WAR SIGNALS
-# ═════════════════════════════════════════════════════════════
+# ===========================================================================
+# TAB 2 - Technical Analysis
+# ===========================================================================
 with tab2:
-    # Top metrics
-    m1,m2,m3,m4 = st.columns(4)
-    with m1:
-        if oil:
-            prem = round(oil-OIL_BASE,2)
-            st.metric("Oil (WTI)", fmt(oil), f"+{fmt(prem)} war premium")
-        else: st.metric("Oil","N/A")
-    with m2:
-        if vix is not None:
-            vl = "Calm" if vix<15 else "Normal" if vix<20 else "Worried" if vix<30 else "Scared" if vix<40 else "PANIC"
-            st.metric("VIX",f"{vix:.1f}",vl)
-        else: st.metric("VIX","N/A")
-    with m3:
-        if sp: st.metric("S&P 500",f"{sp:,.0f}")
-        else: st.metric("S&P 500","N/A")
-    with m4:
-        if gold: st.metric("Gold",f"${gold:,.0f}")
-        else: st.metric("Gold","N/A")
+    st.markdown(
+        '<p class="section-label">Technical Analysis</p>',
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("---")
-    lc, rc = st.columns(2)
+    if ENGINE:
+        for _t in PORTFOLIO_TICKERS:
+            with st.expander(
+                _t + " - " + position_data[_t]["name"], expanded=False
+            ):
+                try:
+                    signals = get_technical_signals(_t)
+                    if signals:
+                        cols_ta = st.columns(4)
+                        rsi = signals.get("rsi", 50)
+                        rsi_color = (
+                            "#A32D2D"
+                            if rsi > 70
+                            else ("#3B6D11" if rsi < 30 else "#888")
+                        )
+                        cols_ta[0].markdown(
+                            '<div class="card"><strong>RSI</strong><br>'
+                            + '<span style="color:'
+                            + rsi_color
+                            + ';font-size:24px;font-weight:700">'
+                            + str(round(rsi, 1))
+                            + "</span></div>",
+                            unsafe_allow_html=True,
+                        )
 
-    with lc:
-        st.markdown(f'<div style="font-size:14px;font-weight:700">Ceasefire Signals — {cf_fired} of 6 fired</div>'
-            f'<div style="font-size:12px;color:#888;margin-bottom:8px">Buy DAL + RCL when 2 fire</div>', unsafe_allow_html=True)
-        st.progress(min(cf_fired/6,1.0))
-        for name,fired,detail in cf_sigs:
-            dot = "🟢" if fired is True else ("🟡" if fired is None else "⚪")
-            st.markdown(f'<div class="signal-row">{dot} <b>{name}</b><br><span style="font-size:12px;color:#888;margin-left:22px">{detail}</span></div>', unsafe_allow_html=True)
+                        macd_val = signals.get("macd", 0)
+                        macd_color = "#3B6D11" if macd_val > 0 else "#A32D2D"
+                        cols_ta[1].markdown(
+                            '<div class="card"><strong>MACD</strong><br>'
+                            + '<span style="color:'
+                            + macd_color
+                            + ';font-size:24px;font-weight:700">'
+                            + str(round(macd_val, 2))
+                            + "</span></div>",
+                            unsafe_allow_html=True,
+                        )
 
-        st.markdown("**Manual checks:**")
-        for label,q in [("Iranian FM peace","Iranian+foreign+minister+ceasefire+today"),
-                        ("Mediator announced","Iran+US+ceasefire+mediator+today"),
-                        ("Trump statement","Trump+Iran+peace+ceasefire+today")]:
-            st.markdown(f'<a href="https://www.perplexity.ai/search?q={q}" target="_blank" '
-                f'style="font-size:13px;margin-left:8px">Search: {label}</a>', unsafe_allow_html=True)
+                        ma50 = signals.get("ma50", 0)
+                        ma200 = signals.get("ma200", 0)
+                        cross = (
+                            "Golden Cross"
+                            if ma50 > ma200
+                            else "Death Cross"
+                        )
+                        cross_color = (
+                            "#3B6D11" if ma50 > ma200 else "#A32D2D"
+                        )
+                        cols_ta[2].markdown(
+                            '<div class="card"><strong>MA 50/200</strong><br>'
+                            + '<span style="color:'
+                            + cross_color
+                            + ';font-weight:600">'
+                            + cross
+                            + "</span></div>",
+                            unsafe_allow_html=True,
+                        )
 
-        if cf_fired>=2:
-            st.markdown(f'<div class="card-green" style="border-radius:10px;padding:14px;margin-top:8px">'
-                f'<b style="color:#3B6D11">BUY SIGNAL:</b> Use $375 for DAL + $375 for RCL from cash reserve.<br>'
-                f'Fidelity: Search ticker &rarr; Buy &rarr; Limit Order &rarr; Submit</div>', unsafe_allow_html=True)
+                        vol = signals.get("volume_trend", "normal")
+                        cols_ta[3].markdown(
+                            '<div class="card"><strong>Volume</strong><br>'
+                            + str(vol)
+                            + "</div>",
+                            unsafe_allow_html=True,
+                        )
 
-    with rc:
-        st.markdown(f'<div style="font-size:14px;font-weight:700">Danger Signals — {esc_fired} of 5</div>'
-            f'<div style="font-size:12px;color:#888;margin-bottom:8px">If ANY fires — stop everything</div>', unsafe_allow_html=True)
-        st.progress(min(esc_fired/5,1.0) if esc_fired>0 else 0.0)
-        for name,fired,detail in esc_sigs:
-            dot = "🔴" if fired is True else ("🟡" if fired is None else "⚪")
-            st.markdown(f'<div class="signal-row">{dot} <b>{name}</b><br><span style="font-size:12px;color:#888;margin-left:22px">{detail}</span></div>', unsafe_allow_html=True)
-        if esc_fired>0:
-            st.markdown(f'<div class="card-red" style="border-radius:10px;padding:14px;margin-top:8px">'
-                f'<b style="color:#A32D2D">DANGER — Do not trade today. Fidelity: 800-343-3548</b></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="card-green" style="border-radius:10px;padding:10px;margin-top:8px;text-align:center">'
-                f'<span style="color:#3B6D11;font-weight:600">No danger signals. Positions safe.</span></div>', unsafe_allow_html=True)
+                        bb_upper = signals.get("bb_upper", 0)
+                        bb_lower = signals.get("bb_lower", 0)
+                        if bb_upper and bb_lower:
+                            st.write(
+                                "Bollinger Bands: Upper "
+                                + fmt_dollar(bb_upper)
+                                + " | Lower "
+                                + fmt_dollar(bb_lower)
+                            )
 
-    # Oil analysis
-    if oil:
-        st.markdown("---")
-        prem = oil-OIL_BASE; pp = (prem/OIL_BASE)*100
-        cfl = round(oil-prem*0.80,2); cfh = round(oil-prem*0.60,2)
-        st.markdown(f'<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888">Oil market</div>', unsafe_allow_html=True)
-        oc1,oc2,oc3,oc4 = st.columns(4)
-        oc1.metric("Pre-war", fmt(OIL_BASE))
-        oc2.metric("Now", fmt(oil))
-        oc3.metric("War Premium", f"+{fmt(prem)}", f"+{pp:.0f}%")
-        oc4.metric("After Ceasefire", f"{fmt(cfl)}–{fmt(cfh)}")
-        st.caption("When oil drops: XOM falls, DAL and RCL rise. Gulf War 1991: premium collapsed 60-80%.")
+                        if PLOTLY:
+                            _hist = fetch_hist(_t, period="3mo")
+                            if not _hist.empty:
+                                _fig = go.Figure(
+                                    go.Candlestick(
+                                        x=_hist.index,
+                                        open=_hist["Open"].values.flatten(),
+                                        high=_hist["High"].values.flatten(),
+                                        low=_hist["Low"].values.flatten(),
+                                        close=_hist["Close"]
+                                        .values.flatten(),
+                                    )
+                                )
+                                _fig.update_layout(
+                                    height=350,
+                                    margin=dict(l=0, r=0, t=20, b=0),
+                                    xaxis_rangeslider_visible=False,
+                                )
+                                st.plotly_chart(
+                                    _fig,
+                                    use_container_width=True,
+                                    key="candle_" + _t,
+                                )
+                    else:
+                        st.info("No signals available for " + _t)
+                except Exception as e:
+                    st.warning("Error loading " + _t + ": " + str(e))
+    else:
+        st.markdown(
+            '<div class="amber-box">'
+            "Technical analysis loading... Run data_engine.py first to enable"
+            " full RSI, MACD, Bollinger, and candlestick charts."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        # Fallback: basic charts with inline yfinance
+        for _t in PORTFOLIO_TICKERS:
+            with st.expander(
+                _t + " - " + position_data[_t]["name"], expanded=False
+            ):
+                if PLOTLY:
+                    try:
+                        _hist = fetch_hist(_t, period="3mo")
+                        if not _hist.empty:
+                            close_vals = _hist["Close"].values.flatten()
+                            # Basic RSI
+                            delta = pd.Series(close_vals).diff()
+                            gain = (
+                                delta.where(delta > 0, 0).rolling(14).mean()
+                            )
+                            loss = (
+                                (-delta.where(delta < 0, 0))
+                                .rolling(14)
+                                .mean()
+                            )
+                            rs = gain / loss
+                            rsi_series = 100 - (100 / (1 + rs))
+                            rsi_val = (
+                                float(rsi_series.iloc[-1])
+                                if not pd.isna(rsi_series.iloc[-1])
+                                else 50
+                            )
+
+                            # MA50
+                            ma50_val = (
+                                float(
+                                    pd.Series(close_vals)
+                                    .rolling(50)
+                                    .mean()
+                                    .iloc[-1]
+                                )
+                                if len(close_vals) >= 50
+                                else float(close_vals[-1])
+                            )
+                            ma200_val = (
+                                float(
+                                    pd.Series(close_vals)
+                                    .rolling(200)
+                                    .mean()
+                                    .iloc[-1]
+                                )
+                                if len(close_vals) >= 200
+                                else 0
+                            )
+
+                            rsi_color = (
+                                "#A32D2D"
+                                if rsi_val > 70
+                                else (
+                                    "#3B6D11" if rsi_val < 30 else "#888"
+                                )
+                            )
+                            c1, c2 = st.columns(2)
+                            c1.markdown(
+                                '<div class="card"><strong>RSI(14)</strong><br>'
+                                + '<span style="color:'
+                                + rsi_color
+                                + ';font-size:20px;font-weight:700">'
+                                + str(round(rsi_val, 1))
+                                + "</span></div>",
+                                unsafe_allow_html=True,
+                            )
+
+                            if ma200_val > 0:
+                                cross_label = (
+                                    "Golden Cross"
+                                    if ma50_val > ma200_val
+                                    else "Death Cross"
+                                )
+                                cross_c = (
+                                    "#3B6D11"
+                                    if ma50_val > ma200_val
+                                    else "#A32D2D"
+                                )
+                                c2.markdown(
+                                    '<div class="card"><strong>MA 50/200</strong><br>'
+                                    + '<span style="color:'
+                                    + cross_c
+                                    + ';font-weight:600">'
+                                    + cross_label
+                                    + "</span></div>",
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                c2.markdown(
+                                    '<div class="card"><strong>MA 50</strong><br>'
+                                    + fmt_dollar(ma50_val)
+                                    + "</div>",
+                                    unsafe_allow_html=True,
+                                )
+
+                            # Candlestick chart
+                            _fig = go.Figure(
+                                go.Candlestick(
+                                    x=_hist.index,
+                                    open=_hist["Open"].values.flatten(),
+                                    high=_hist["High"].values.flatten(),
+                                    low=_hist["Low"].values.flatten(),
+                                    close=_hist["Close"].values.flatten(),
+                                )
+                            )
+                            _fig.update_layout(
+                                height=300,
+                                margin=dict(l=0, r=0, t=20, b=0),
+                                xaxis_rangeslider_visible=False,
+                            )
+                            st.plotly_chart(
+                                _fig,
+                                use_container_width=True,
+                                key="candle_fb_" + _t,
+                            )
+                    except Exception:
+                        st.info("Chart unavailable for " + _t)
+                else:
+                    st.info("Install plotly for charts: pip install plotly")
+
+# ===========================================================================
+# TAB 3 - War Signals
+# ===========================================================================
+with tab3:
+    st.markdown(
+        '<p class="section-label">Geopolitical War Dashboard</p>',
+        unsafe_allow_html=True,
+    )
+
+    war_data = fetch_war_indicators()
+    oil_price = war_data.get("Oil", 0)
+    vix_val = war_data.get("VIX", 0)
+    sp_val = war_data.get("S&P 500", 0)
+    gold_val = war_data.get("Gold", 0)
+    tlt_val = war_data.get("TLT", 0)
+
+    # Top metrics row
+    m1, m2, m3, m4, m5 = st.columns(5)
+    oil_premium = (
+        ((oil_price - OIL_BASELINE) / OIL_BASELINE * 100)
+        if OIL_BASELINE
+        else 0
+    )
+    oil_cls = (
+        "red-box"
+        if oil_premium > 15
+        else ("amber-box" if oil_premium > 5 else "green-box")
+    )
+    m1.markdown(
+        '<div class="'
+        + oil_cls
+        + '"><strong>Oil</strong><br>'
+        + fmt_dollar(oil_price)
+        + "<br>Premium: "
+        + fmt_pct(oil_premium)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    vix_label = (
+        "Extreme Fear"
+        if vix_val > 30
+        else ("Fear" if vix_val > 20 else "Normal")
+    )
+    vix_cls = (
+        "red-box"
+        if vix_val > 30
+        else ("amber-box" if vix_val > 20 else "green-box")
+    )
+    m2.markdown(
+        '<div class="'
+        + vix_cls
+        + '"><strong>VIX</strong><br>'
+        + str(round(vix_val, 1))
+        + "<br>"
+        + vix_label
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    m3.markdown(
+        '<div class="blue-box"><strong>S&P 500</strong><br>'
+        + "{:,.0f}".format(sp_val)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    m4.markdown(
+        '<div class="blue-box"><strong>Gold</strong><br>'
+        + fmt_dollar(gold_val)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    m5.markdown(
+        '<div class="blue-box"><strong>TLT</strong><br>'
+        + fmt_dollar(tlt_val)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Two columns: ceasefire vs danger signals
+    cease_col, danger_col = st.columns(2)
+
+    ceasefire_signals = [
+        ("Oil drops below $68", oil_price < 68, oil_price > 0),
+        ("VIX drops below 18", vix_val < 18, vix_val > 0),
+        (
+            "DAL up 10%+ from baseline",
+            current_prices.get("DAL", 0) > 58.25 * 1.1,
+            current_prices.get("DAL", 0) > 0,
+        ),
+        (
+            "RCL up 10%+ from baseline",
+            current_prices.get("RCL", 0) > 269.93 * 1.1,
+            current_prices.get("RCL", 0) > 0,
+        ),
+        ("Diplomatic talks announced", False, False),
+        ("Gold retreats 5%+ from peak", False, False),
+    ]
+
+    danger_signals = [
+        ("Oil above $80", oil_price > 80, oil_price > 0),
+        ("VIX above 35", vix_val > 35, vix_val > 0),
+        ("S&P drops 5%+ in a week", False, False),
+        ("Conflict escalation news", False, False),
+        ("Gold spikes above $3000/oz", gold_val > 3000, gold_val > 0),
+    ]
+
+    with cease_col:
+        st.markdown(
+            '<p class="section-label">Ceasefire Signals</p>',
+            unsafe_allow_html=True,
+        )
+        fired_count = 0
+        for label, fired, auto_check in ceasefire_signals:
+            if auto_check:
+                dot = "signal-dot-green" if fired else "signal-dot-gray"
+                if fired:
+                    fired_count += 1
+            else:
+                dot = "signal-dot-amber"
+            st.markdown(
+                '<span class="' + dot + '"></span> ' + label,
+                unsafe_allow_html=True,
+            )
+        st.markdown("**" + str(fired_count) + "/6 signals fired**")
+
+    with danger_col:
+        st.markdown(
+            '<p class="section-label">Danger Signals</p>',
+            unsafe_allow_html=True,
+        )
+        dfired = 0
+        for label, fired, auto_check in danger_signals:
+            if auto_check:
+                dot = "signal-dot-green" if fired else "signal-dot-gray"
+                if fired:
+                    dfired += 1
+            else:
+                dot = "signal-dot-amber"
+            st.markdown(
+                '<span class="' + dot + '"></span> ' + label,
+                unsafe_allow_html=True,
+            )
+        st.markdown("**" + str(dfired) + "/5 danger signals fired**")
+
+    # Perplexity links for manual signals
+    st.markdown(
+        '<p class="section-label">Manual Check Links</p>',
+        unsafe_allow_html=True,
+    )
+    perp_queries = [
+        (
+            "Diplomatic talks Ukraine Russia",
+            "https://www.perplexity.ai/search?q=Ukraine+Russia+ceasefire+diplomatic+talks+today",
+        ),
+        (
+            "Conflict escalation news",
+            "https://www.perplexity.ai/search?q=Ukraine+Russia+conflict+escalation+today",
+        ),
+        (
+            "Gold peak analysis",
+            "https://www.perplexity.ai/search?q=gold+price+52+week+high+retreat",
+        ),
+    ]
+    for label, url in perp_queries:
+        st.markdown("[" + label + "](" + url + ")")
 
     # Conflict timeline
-    st.markdown("---")
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888">Conflict timeline</div>', unsafe_allow_html=True)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=[0,WAR_DAYS,21,42,100], y=[0]*5, mode="markers+text",
-        marker=dict(size=[12,18,14,14,14], color=["#888","#e67e22" if WAR_DAYS<21 else "#27ae60","#e74c3c","#27ae60","#3498db"]),
-        text=["Feb 28<br>Start",f"Day {WAR_DAYS}<br>TODAY","Day 21<br>Typical Bottom","Day 42<br>Ceasefire Window","Day 100+<br>Reconstruction"],
-        textposition="top center", textfont=dict(size=11)))
-    fig.update_layout(height=120, margin=dict(l=20,r=20,t=50,b=10),
-        xaxis=dict(range=[-5,110],showgrid=False,zeroline=False),
-        yaxis=dict(visible=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(
+        '<p class="section-label">Conflict Timeline</p>',
+        unsafe_allow_html=True,
+    )
+    if PLOTLY:
+        milestones = [
+            {"day": 0, "label": "War Start (Feb 28)"},
+            {"day": conflict_day, "label": "TODAY (Day " + str(conflict_day) + ")"},
+            {"day": 21, "label": "Day 21 (Ceasefire Window)"},
+            {"day": 42, "label": "Day 42 (Window Close)"},
+            {"day": 100, "label": "Day 100 (Protracted)"},
+        ]
+        colors_tl = ["#A32D2D", "#185FA5", "#3B6D11", "#633806", "#888"]
+        _fig = go.Figure()
+        for i_ms, ms in enumerate(milestones):
+            _fig.add_trace(
+                go.Scatter(
+                    x=[ms["day"]],
+                    y=[0],
+                    mode="markers+text",
+                    marker=dict(size=16, color=colors_tl[i_ms]),
+                    text=[ms["label"]],
+                    textposition="top center",
+                    showlegend=False,
+                )
+            )
+        _fig.update_layout(
+            height=150,
+            margin=dict(l=0, r=0, t=40, b=0),
+            yaxis=dict(visible=False, range=[-0.5, 0.5]),
+            xaxis=dict(title="Conflict Day"),
+        )
+        st.plotly_chart(_fig, use_container_width=True)
 
-    fd_d,fd_dy = next_fomc()
-    if fd_d:
-        st.markdown(f'<div class="card-blue" style="border-radius:8px;padding:10px;text-align:center">'
-            f'<b>Next Fed Meeting:</b> {fd_d} ({fd_dy} days) &middot; Rate cut = buy more &middot; Rate hike = hold cash</div>', unsafe_allow_html=True)
+    # Oil analysis
+    st.markdown(
+        '<p class="section-label">Oil Analysis</p>', unsafe_allow_html=True
+    )
+    ceasefire_oil_target = OIL_BASELINE * 1.05
+    st.markdown(
+        '<div class="blue-box">'
+        + "Baseline (pre-conflict): "
+        + fmt_dollar(OIL_BASELINE)
+        + " &middot; Current: "
+        + fmt_dollar(oil_price)
+        + " &middot; Premium: "
+        + fmt_pct(oil_premium)
+        + "<br>Ceasefire target (oil normalizes): below "
+        + fmt_dollar(ceasefire_oil_target)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
-# ═════════════════════════════════════════════════════════════
-# TAB 3 — OPPORTUNITIES
-# ═════════════════════════════════════════════════════════════
-with tab3:
-    bc, bs = load_md("BROAD_UNIVERSE_")
-    if bc:
-        secs = {"sector":[],"fa":[],"approaching":[],"recon":[]}
-        cur = None
-        for line in bc.split("\n"):
-            lu = line.upper()
-            if "SECTOR HEALTH" in lu: cur="sector"; continue
-            elif "FALLEN ANGEL OPPORTUNITIES" in lu and "30%" in line: cur="fa"; continue
-            elif "APPROACHING FALLEN ANGEL" in lu: cur="approaching"; continue
-            elif "RECONSTRUCTION WATCH" in lu: cur="recon"; continue
-            elif "CRYPTO" in lu and "UPDATE" in lu: cur=None; continue
-            elif "MACRO CONTEXT" in lu: cur=None; continue
-            elif line.startswith("-----"): continue
-            if cur and line.strip(): secs[cur].append(line)
+    # FOMC tracker
+    st.markdown(
+        '<p class="section-label">FOMC 2026 Schedule</p>',
+        unsafe_allow_html=True,
+    )
+    fomc_html = ""
+    for _d in FOMC_DATES:
+        fomc_html += (
+            '<span class="heat-tile" style="background:#E6F1FB;color:#185FA5">'
+            + _d
+            + "</span>"
+        )
+    st.markdown(fomc_html, unsafe_allow_html=True)
 
-        # Sector heat map
-        if secs["sector"]:
-            st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Sector health — deeper red = more opportunity</div>', unsafe_allow_html=True)
-            scols = st.columns(3)
-            for i,line in enumerate(secs["sector"]):
-                # Parse sector line
-                try:
-                    parts = line.split(":**")
-                    if len(parts)>=2:
-                        sname = parts[0].replace("**","").strip()
-                        rest = parts[1].strip()
-                        # Extract percentage
-                        import re
-                        m = re.search(r'(-?\d+\.?\d*)%', rest)
-                        pval = float(m.group(1)) if m else 0
-                        # Color based on drop
-                        if pval<=-30: bg="#c0392b"
-                        elif pval<=-20: bg="#e74c3c"
-                        elif pval<=-10: bg="#e67e22"
-                        else: bg="#95a5a6"
-                        tc = "white"
-                        with scols[i%3]:
-                            st.markdown(f'<div class="heatbox" style="background:{bg};color:{tc}">'
-                                f'<div style="font-weight:600;font-size:12px">{sname}</div>'
-                                f'<div style="font-size:16px;font-weight:800">{pval:.0f}%</div></div>', unsafe_allow_html=True)
-                except: pass
-            st.markdown("---")
-
-        # Fallen angels
-        if secs["fa"]:
-            fa_count = len([l for l in secs["fa"] if l.startswith("###") or (l.startswith("**") and "—" in l and "Watch" not in l)])
-            st.markdown(f'<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Fallen angels — {fa_count} found (all shown, no limit)</div>', unsafe_allow_html=True)
-            for line in secs["fa"]:
-                st.markdown(line)
-        else:
-            st.info("No fallen angels found today.")
-
-        if secs["approaching"]:
-            st.markdown("---")
-            st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Approaching fallen angel territory (20-29%)</div>', unsafe_allow_html=True)
-            for line in secs["approaching"]: st.markdown(line)
-
-        if secs["recon"]:
-            st.markdown("---")
-            st.markdown(f'<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Reconstruction watch — Phase C (Day 100+, currently Day {WAR_DAYS})</div>', unsafe_allow_html=True)
-            for line in secs["recon"]: st.markdown(line)
-    else:
-        st.warning("Run the daily runner first.")
-
-# ═════════════════════════════════════════════════════════════
-# TAB 4 — MOMENTUM
-# ═════════════════════════════════════════════════════════════
+# ===========================================================================
+# TAB 4 - Opportunities
+# ===========================================================================
 with tab4:
-    st.markdown(f'<div class="card-blue" style="border-radius:10px;padding:14px">'
-        f'<b>Momentum Scanner</b><br><span style="font-size:13px">'
-        f'Stocks going UP strongly — up 20%+ from recent low in relevant sectors. '
-        f'The opposite of fallen angels.</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-label">Fallen Angels & Opportunities</p>',
+        unsafe_allow_html=True,
+    )
 
-    if bc:
-        mlines = []
-        inm = False
-        for line in bc.split("\n"):
-            if "MOMENTUM" in line.upper() and ("SCANNER" in line.upper() or "OPPORTUNIT" in line.upper()):
-                inm=True; continue
-            if inm:
-                if line.startswith("-----") or ("CRYPTO" in line.upper() and "UPDATE" in line.upper()): inm=False; continue
-                if line.strip(): mlines.append(line)
-        if mlines:
-            for line in mlines: st.markdown(line)
+    scan_data = fetch_52w_data(SCAN_UNIVERSE)
+
+    # Sector grouping
+    SECTORS = {
+        "Airlines": ["DAL", "UAL", "AAL", "LUV", "JBLU"],
+        "Cruise & Travel": ["CCL", "RCL", "NCLH", "MAR", "HLT", "ABNB"],
+        "Cybersecurity": ["ZS", "CRWD", "PANW", "FTNT", "CYBR", "S"],
+        "Social/Tech": ["NFLX", "META", "SNAP", "PINS", "RBLX", "COIN"],
+        "Industrial/Ship": ["BA", "GE", "MMM", "ZIM", "SBLK", "DAC"],
+        "Cannabis/Nuclear": ["TLRY", "CGC", "NNE", "CCJ", "UEC"],
+        "Construction": ["FLR", "KBR", "PWR", "MTZ"],
+        "Semiconductors": ["NVDA", "AMD", "INTC", "QCOM", "MU"],
+        "Energy": ["XOM", "CVX", "COP", "OXY", "SLB"],
+        "Software/Fintech": [
+            "ORCL",
+            "CRM",
+            "ADBE",
+            "PYPL",
+            "UBER",
+            "LYFT",
+            "HOOD",
+        ],
+    }
+
+    # Sector heat map
+    st.markdown(
+        '<p class="section-label">Sector Heat Map (Avg Drop from 52w High)</p>',
+        unsafe_allow_html=True,
+    )
+    sector_tiles = ""
+    for sector, tickers_in_sector in SECTORS.items():
+        drops = [
+            scan_data[t]["drop_pct"]
+            for t in tickers_in_sector
+            if t in scan_data
+        ]
+        avg_drop = float(np.mean(drops)) if drops else 0
+        if avg_drop <= -30:
+            bg, fg = "#FCEBEB", "#A32D2D"
+        elif avg_drop <= -20:
+            bg, fg = "#FAEEDA", "#633806"
+        elif avg_drop <= -10:
+            bg, fg = "#E6F1FB", "#185FA5"
         else:
-            st.info("Momentum data generates with the upgraded daily runner. Check back tomorrow.")
+            bg, fg = "#EAF3DE", "#3B6D11"
+        sector_tiles += (
+            '<span class="heat-tile" style="background:'
+            + bg
+            + ";color:"
+            + fg
+            + '">'
+            + sector
+            + "<br>"
+            + str(round(avg_drop, 1))
+            + "%</span>"
+        )
+    st.markdown(sector_tiles, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Built-in momentum — your defence and energy holdings</div>', unsafe_allow_html=True)
-    mc = st.columns(3)
-    for i,t in enumerate(["LMT","RTX","ITA","BAESY","LNG","XOM"]):
-        e=emap[t]; cp=live[t]["p"]
-        gp = round((cp-e["entry"])/e["entry"]*100,1)
-        bg = "#EAF3DE" if gp>=0 else "#FCEBEB"
-        tc = "#3B6D11" if gp>=0 else "#A32D2D"
-        with mc[i%3]:
-            st.markdown(f'<div class="heatbox" style="background:{bg}">'
-                f'<div style="font-weight:700;font-size:14px;color:#333">{t}</div>'
-                f'<div style="font-size:18px;font-weight:800;color:{tc}">{pct(gp)}</div>'
-                f'<div style="font-size:11px;color:#888">{fmt(cp)}</div></div>', unsafe_allow_html=True)
+    # Fallen angels (30%+)
+    fallen = {
+        t: d for t, d in scan_data.items() if d["drop_pct"] <= -30
+    }
+    st.markdown(
+        '<p class="section-label">Fallen Angels (30%+ Below 52w High) &mdash; '
+        + str(len(fallen))
+        + " Found</p>",
+        unsafe_allow_html=True,
+    )
+    for fa_t, fa_d in sorted(
+        fallen.items(), key=lambda x: x[1]["drop_pct"]
+    ):
+        with st.expander(
+            fa_t + ": " + str(round(fa_d["drop_pct"], 1)) + "% from 52w high"
+        ):
+            st.markdown(
+                '<div class="red-box">Current: '
+                + fmt_dollar(fa_d["price"])
+                + " &middot; 52w High: "
+                + fmt_dollar(fa_d["high_52w"])
+                + " &middot; Drop: "
+                + str(round(fa_d["drop_pct"], 1))
+                + "%</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "[Research on Perplexity](https://www.perplexity.ai/search?q="
+                + fa_t
+                + "+stock+why+dropped+recovery)"
+            )
 
-# ═════════════════════════════════════════════════════════════
-# TAB 5 — MY CRYPTO
-# ═════════════════════════════════════════════════════════════
+    # Approaching (20-29%)
+    approaching = {
+        t: d
+        for t, d in scan_data.items()
+        if -30 < d["drop_pct"] <= -20
+    }
+    st.markdown(
+        '<p class="section-label">Approaching (20-29% Below 52w High) &mdash; '
+        + str(len(approaching))
+        + " Found</p>",
+        unsafe_allow_html=True,
+    )
+    for ap_t, ap_d in sorted(
+        approaching.items(), key=lambda x: x[1]["drop_pct"]
+    ):
+        with st.expander(
+            ap_t
+            + ": "
+            + str(round(ap_d["drop_pct"], 1))
+            + "% from 52w high"
+        ):
+            st.markdown(
+                '<div class="amber-box">Current: '
+                + fmt_dollar(ap_d["price"])
+                + " &middot; 52w High: "
+                + fmt_dollar(ap_d["high_52w"])
+                + " &middot; Drop: "
+                + str(round(ap_d["drop_pct"], 1))
+                + "%</div>",
+                unsafe_allow_html=True,
+            )
+
+    # Reconstruction watch
+    st.markdown(
+        '<p class="section-label">Reconstruction Watch</p>',
+        unsafe_allow_html=True,
+    )
+    for _t in ["FLR", "KBR"]:
+        if _t in scan_data:
+            _d = scan_data[_t]
+            st.markdown(
+                '<div class="blue-box"><strong>'
+                + _t
+                + "</strong> &middot; Current: "
+                + fmt_dollar(_d["price"])
+                + " &middot; 52w High: "
+                + fmt_dollar(_d["high_52w"])
+                + " &middot; "
+                + str(round(_d["drop_pct"], 1))
+                + "% from high</div>",
+                unsafe_allow_html=True,
+            )
+
+# ===========================================================================
+# TAB 5 - Momentum
+# ===========================================================================
 with tab5:
-    cl = crypto(); cg = crypto_global()
-    fng_val, fng_label = crypto_fng()
+    st.markdown(
+        '<p class="section-label">Momentum Stocks (20%+ from 52w Low)</p>',
+        unsafe_allow_html=True,
+    )
+
+    momentum_universe = list(set(SCAN_UNIVERSE + PORTFOLIO_TICKERS))
+    momentum_data = fetch_momentum_data(momentum_universe)
+
+    if momentum_data:
+        for mom_t, mom_d in sorted(
+            momentum_data.items(),
+            key=lambda x: x[1]["gain_pct"],
+            reverse=True,
+        ):
+            in_portfolio = mom_t in PORTFOLIO_TICKERS
+            tag = (
+                ' <span style="color:#185FA5;font-weight:600">[OWNED]</span>'
+                if in_portfolio
+                else ""
+            )
+            st.markdown(
+                '<div class="green-box"><strong>'
+                + mom_t
+                + "</strong>"
+                + tag
+                + " &middot; "
+                + fmt_pct(mom_d["gain_pct"])
+                + " from 52w low &middot; Current: "
+                + fmt_dollar(mom_d["price"])
+                + " &middot; Low: "
+                + fmt_dollar(mom_d["low_52w"])
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info(
+            "No stocks 20%+ from 52-week low in scan universe."
+        )
+
+    # Portfolio momentum
+    st.markdown(
+        '<p class="section-label">Your Portfolio Momentum</p>',
+        unsafe_allow_html=True,
+    )
+    defense_tickers = ["LMT", "RTX", "ITA", "BAESY"]
+    energy_tickers = ["XOM", "LNG", "CEG"]
+
+    for group_name, group_tickers in [
+        ("Defense Holdings", defense_tickers),
+        ("Energy Holdings", energy_tickers),
+    ]:
+        st.markdown("**" + group_name + "**")
+        for _t in group_tickers:
+            _d = position_data.get(_t, {})
+            if _d:
+                _cls = color_class(_d["pnl"])
+                st.markdown(
+                    '<div class="'
+                    + _cls
+                    + '">'
+                    + _t
+                    + ": "
+                    + fmt_pct(_d["pnl_pct"])
+                    + " &middot; P&L: "
+                    + fmt_dollar(_d["pnl"])
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+
+# ===========================================================================
+# TAB 6 - My Crypto
+# ===========================================================================
+with tab6:
+    st.markdown(
+        '<p class="section-label">Crypto Portfolio</p>',
+        unsafe_allow_html=True,
+    )
+
+    crypto_prices = fetch_crypto_prices()
+    fg_data = fetch_fear_greed()
+    crypto_global = fetch_crypto_global()
 
     # Top metrics
-    cm1,cm2,cm3,cm4 = st.columns(4)
-    with cm1:
-        if cg:
-            cap = cg.get("total_market_cap",{}).get("usd",0)
-            cm1.metric("Crypto Market Cap", f"${cap/1e12:.2f}T")
-    with cm2:
-        if cg:
-            bd = cg.get("market_cap_percentage",{}).get("btc",0)
-            cm2.metric("BTC Dominance", f"{bd:.1f}%")
-    with cm3:
-        if fng_val:
-            fc = "#c0392b" if fng_val<25 else "#e67e22" if fng_val<50 else "#27ae60" if fng_val<75 else "#8e44ad"
-            cm3.markdown(f'<div style="text-align:center"><div style="font-size:11px;color:#888">Fear & Greed</div>'
-                f'<div style="font-size:24px;font-weight:800;color:{fc}">{fng_val}</div>'
-                f'<div style="font-size:12px;color:{fc}">{fng_label}</div></div>', unsafe_allow_html=True)
-        else:
-            cm3.metric("Fear & Greed", "N/A")
-    with cm4:
-        if cl and "ripple" in cl:
-            xrp_24 = cl["ripple"].get("usd_24h_change",0)
-            cm4.metric("XRP 24h", pct(xrp_24))
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mkt_cap = crypto_global.get(
+        "market_cap",
+        CRYPTO_FOUNDATION.get("market_overview", {}).get(
+            "total_market_cap_usd", 0
+        ),
+    )
+    btc_dom = crypto_global.get(
+        "btc_dominance",
+        CRYPTO_FOUNDATION.get("market_overview", {}).get(
+            "btc_dominance", 0
+        ),
+    )
 
-    st.markdown("---")
+    mc1.markdown(
+        '<div class="blue-box"><strong>Market Cap</strong><br>$'
+        + str(round(mkt_cap / 1e12, 2))
+        + "T</div>",
+        unsafe_allow_html=True,
+    )
+    mc2.markdown(
+        '<div class="blue-box"><strong>BTC Dominance</strong><br>'
+        + str(round(btc_dom, 1))
+        + "%</div>",
+        unsafe_allow_html=True,
+    )
 
-    coins = {"ripple":("XRP","XRP","Largest holding — cross-border bank payments"),
-             "bitcoin":("Bitcoin","BTC","Original cryptocurrency, digital gold"),
-             "stellar":("Stellar","XLM","Payments for developing countries"),
-             "cardano":("Cardano","ADA","Proof-of-stake blockchain"),
-             "hedera-hashgraph":("Hedera","HBAR","Enterprise ledger — Google, IBM, Boeing")}
+    fg_val = fg_data.get("value", "N/A")
+    fg_label = fg_data.get("label", "N/A")
+    fg_cls = (
+        "red-box"
+        if fg_label in ("Extreme Fear", "Fear")
+        else (
+            "green-box"
+            if fg_label in ("Greed", "Extreme Greed")
+            else "amber-box"
+        )
+    )
+    mc3.markdown(
+        '<div class="'
+        + fg_cls
+        + '"><strong>Fear & Greed</strong><br>'
+        + str(fg_val)
+        + " ("
+        + str(fg_label)
+        + ")</div>",
+        unsafe_allow_html=True,
+    )
 
-    # XRP featured
-    if cl and "ripple" in cl:
-        xp = cl["ripple"].get("usd",0)
-        xb = cbase.get("ripple",{}).get("price_usd",0)
-        xchg = round(((xp-xb)/xb)*100,2) if xb else 0
-        x24 = cl["ripple"].get("usd_24h_change",0)
-        xcolor = "#3B6D11" if xchg>=0 else "#A32D2D"
-        st.markdown(f'<div class="card" style="border-radius:12px;padding:18px;border-left:4px solid #2980b9">'
-            f'<div style="font-size:16px;font-weight:700">XRP — Your Largest Crypto Holding</div>'
-            f'<div style="display:flex;gap:32px;margin-top:10px">'
-            f'<div><div style="font-size:11px;color:#888">Now</div><div style="font-size:22px;font-weight:800">${xp}</div></div>'
-            f'<div><div style="font-size:11px;color:#888">Baseline</div><div style="font-size:18px;font-weight:600">${xb}</div></div>'
-            f'<div><div style="font-size:11px;color:#888">Since Start</div><div style="font-size:18px;font-weight:700;color:{xcolor}">{pct(xchg)}</div></div>'
-            f'<div><div style="font-size:11px;color:#888">24h</div><div style="font-size:16px">{pct(x24)}</div></div></div>'
-            f'<div style="font-size:12px;color:#888;margin-top:8px">SEC/Ripple Watch: XRP moves violently on court news. '
-            f'<a href="https://www.perplexity.ai/search?q=XRP+Ripple+SEC+news+today" target="_blank">Check Perplexity</a></div>'
-            f'</div>', unsafe_allow_html=True)
+    xrp_data = crypto_prices.get("ripple", {})
+    xrp_price = xrp_data.get("price", CRYPTO_IDS["ripple"]["baseline"])
+    xrp_chg = xrp_data.get("change_24h", 0)
+    xrp_cls = color_class(xrp_chg)
+    mc4.markdown(
+        '<div class="'
+        + xrp_cls
+        + '"><strong>XRP 24h</strong><br>'
+        + fmt_dollar(xrp_price)
+        + " ("
+        + fmt_pct(xrp_chg)
+        + ")</div>",
+        unsafe_allow_html=True,
+    )
 
-    # Other coins grid
-    st.markdown("")
-    ocols = st.columns(2)
-    for i,cid in enumerate(["bitcoin","stellar","cardano","hedera-hashgraph"]):
-        name,ticker,desc = coins[cid]
-        if cl and cid in cl:
-            cp = cl[cid].get("usd",0)
-            c24 = cl[cid].get("usd_24h_change",0)
-        else:
-            cp = cbase.get(cid,{}).get("price_usd",0); c24=0
-        bp = cbase.get(cid,{}).get("price_usd",0)
-        chg = round(((cp-bp)/bp)*100,2) if bp else 0
-        cc = "#3B6D11" if chg>=0 else "#A32D2D"
-        pfmt = f"${cp:,.2f}" if cp>=1 else f"${cp:,.6f}"
-        bfmt = f"${bp:,.2f}" if bp>=1 else f"${bp:,.6f}"
-        with ocols[i%2]:
-            st.markdown(f'<div class="card" style="border-radius:10px;padding:14px">'
-                f'<div style="font-weight:700">{name} ({ticker})</div>'
-                f'<div style="font-size:12px;color:#888">{desc}</div>'
-                f'<div style="display:flex;gap:20px;margin-top:8px">'
-                f'<div><span style="font-size:11px;color:#888">Now:</span> <b>{pfmt}</b></div>'
-                f'<div><span style="font-size:11px;color:#888">Base:</span> {bfmt}</div>'
-                f'<div><span style="font-size:11px;color:#888">Chg:</span> <span style="color:{cc};font-weight:600">{pct(chg)}</span></div>'
-                f'<div><span style="font-size:11px;color:#888">24h:</span> {pct(c24)}</div></div></div>', unsafe_allow_html=True)
+    # XRP featured section
+    st.markdown(
+        '<p class="section-label">XRP (Largest Holding)</p>',
+        unsafe_allow_html=True,
+    )
+    xrp_baseline = CRYPTO_IDS["ripple"]["baseline"]
+    xrp_total_chg = (
+        ((xrp_price - xrp_baseline) / xrp_baseline * 100)
+        if xrp_baseline
+        else 0
+    )
+    xrp_total_cls = color_class(xrp_total_chg)
+    xrp_desc = CRYPTO_FOUNDATION.get("ripple", {}).get("description", "")
+    st.markdown(
+        '<div class="'
+        + xrp_total_cls
+        + '"><strong>XRP</strong> &mdash; '
+        + xrp_desc
+        + "<br>Baseline: "
+        + fmt_dollar(xrp_baseline)
+        + " &middot; Current: "
+        + fmt_dollar(xrp_price)
+        + " &middot; Change: "
+        + fmt_pct(xrp_total_chg)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "[SEC XRP Watch on Perplexity]"
+        "(https://www.perplexity.ai/search?q=SEC+XRP+Ripple+lawsuit+ruling+latest)"
+    )
 
-    # Context
-    if fng_val:
-        feeling = "extreme fear — people are panic selling" if fng_val<25 else "fear — cautious market" if fng_val<50 else "greed — confident buying" if fng_val<75 else "extreme greed — bubble risk"
-        st.caption(f"The Fear & Greed Index is at {fng_val} ({fng_label}). Investors are feeling {feeling}.")
+    # Other 4 coins in 2x2
+    st.markdown(
+        '<p class="section-label">Other Holdings</p>',
+        unsafe_allow_html=True,
+    )
+    other_coins = ["bitcoin", "stellar", "cardano", "hedera-hashgraph"]
+    grid_cols = st.columns(2)
+    for i_coin, cid in enumerate(other_coins):
+        col = grid_cols[i_coin % 2]
+        cp = crypto_prices.get(cid, {})
+        live_price = cp.get("price", CRYPTO_IDS[cid]["baseline"])
+        live_chg = cp.get("change_24h", 0)
+        baseline = CRYPTO_IDS[cid]["baseline"]
+        total_chg = (
+            ((live_price - baseline) / baseline * 100) if baseline else 0
+        )
+        _cls = color_class(total_chg)
+        coin_name = CRYPTO_FOUNDATION.get(cid, {}).get("name", cid)
+        ticker = CRYPTO_IDS[cid]["ticker"]
+        with col:
+            st.markdown(
+                '<div class="'
+                + _cls
+                + '"><strong>'
+                + ticker
+                + "</strong> ("
+                + coin_name
+                + ")<br>Price: "
+                + fmt_dollar(live_price)
+                + " &middot; 24h: "
+                + fmt_pct(live_chg)
+                + "<br>From baseline: "
+                + fmt_pct(total_chg)
+                + "</div>",
+                unsafe_allow_html=True,
+            )
 
-# ═════════════════════════════════════════════════════════════
-# TAB 6 — WORLD EVENTS
-# ═════════════════════════════════════════════════════════════
-with tab6:
-    # Black swan check
-    if dc and "BLACK SWAN" in dc.upper():
-        st.markdown(f'<div class="card-red" style="border-radius:10px;padding:16px">'
-            f'<b style="color:#A32D2D;font-size:16px">BLACK SWAN ALERT</b><br>'
-            f'An unusual event was detected. Read your STOCKS file immediately.</div>', unsafe_allow_html=True)
+    # Comparison table
+    st.markdown(
+        '<p class="section-label">All Coins Comparison</p>',
+        unsafe_allow_html=True,
+    )
+    table_rows = []
+    for cid, meta in CRYPTO_IDS.items():
+        cp = crypto_prices.get(cid, {})
+        live_p = cp.get("price", meta["baseline"])
+        chg24 = cp.get("change_24h", 0)
+        from_base = (
+            ((live_p - meta["baseline"]) / meta["baseline"] * 100)
+            if meta["baseline"]
+            else 0
+        )
+        table_rows.append(
+            {
+                "Coin": meta["ticker"],
+                "Price": fmt_dollar(live_p),
+                "24h Change": fmt_pct(chg24),
+                "From Baseline": fmt_pct(from_base),
+                "Baseline": fmt_dollar(meta["baseline"]),
+            }
+        )
+    st.dataframe(
+        pd.DataFrame(table_rows), use_container_width=True, hide_index=True
+    )
+
+# ===========================================================================
+# TAB 7 - World Events
+# ===========================================================================
+with tab7:
+    st.markdown(
+        '<p class="section-label">World Events & Intelligence</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Live indicators (use war_data already fetched)
+    st.markdown(
+        '<p class="section-label">Live Market Indicators</p>',
+        unsafe_allow_html=True,
+    )
+    w1, w2, w3, w4 = st.columns(4)
+    w1.markdown(
+        '<div class="blue-box"><strong>Oil</strong><br>'
+        + fmt_dollar(oil_price)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    w2.markdown(
+        '<div class="blue-box"><strong>Gold</strong><br>'
+        + fmt_dollar(gold_val)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    w3.markdown(
+        '<div class="'
+        + vix_cls
+        + '"><strong>VIX</strong><br>'
+        + str(round(vix_val, 1))
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    w4.markdown(
+        '<div class="blue-box"><strong>S&P 500</strong><br>'
+        + "{:,.0f}".format(sp_val)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Perplexity intelligence prompt
+    st.markdown(
+        '<p class="section-label">Perplexity Intelligence Prompt</p>',
+        unsafe_allow_html=True,
+    )
+    perp_prompt = (
+        "You are a geopolitical market analyst. Today is "
+        + today.strftime("%B %d, %Y")
+        + ", Day "
+        + str(conflict_day)
+        + " of the Ukraine-Russia conflict (started Feb 28, 2026).\n\n"
+        + "My portfolio: LMT (1 share), RTX (6), LNG (4), GLD (2), ITA (5), "
+        + "XOM (7), CEG (4), BAESY (10). Cash: $1,500.33.\n"
+        + "Watching: DAL, RCL (ceasefire plays).\n"
+        + "Crypto: XRP (largest), BTC, XLM, ADA, HBAR.\n\n"
+        + "Current readings:\n"
+        + "- Oil: "
+        + fmt_dollar(oil_price)
+        + " (baseline: $64.56, premium: "
+        + fmt_pct(oil_premium)
+        + ")\n"
+        + "- VIX: "
+        + str(round(vix_val, 1))
+        + "\n"
+        + "- Gold: "
+        + fmt_dollar(gold_val)
+        + "\n"
+        + "- S&P 500: "
+        + "{:,.0f}".format(sp_val)
+        + "\n\n"
+        + "Questions:\n"
+        + "1. What is the latest on Ukraine-Russia ceasefire negotiations?\n"
+        + "2. Any new sanctions or military escalation in the last 24 hours?\n"
+        + "3. Oil market outlook for next 7 days given current geopolitics?\n"
+        + "4. Should I adjust any positions based on today's developments?\n"
+        + "5. Any signals to enter DAL or RCL?\n"
+        + "6. XRP/crypto regulatory developments?\n"
+    )
+    st.code(perp_prompt, language="text")
+
+    # FOMC tracker
+    st.markdown(
+        '<p class="section-label">FOMC 2026 Schedule</p>',
+        unsafe_allow_html=True,
+    )
+    fomc_display = ""
+    for _d in FOMC_DATES:
+        fomc_display += (
+            '<span class="heat-tile" style="background:#E6F1FB;color:#185FA5">'
+            + _d
+            + "</span>"
+        )
+    st.markdown(fomc_display, unsafe_allow_html=True)
+
+    # Macro context
+    st.markdown(
+        '<p class="section-label">Macro Context</p>', unsafe_allow_html=True
+    )
+    gpr = FOUNDATION.get("step6_gpr", {})
+    shipping = FOUNDATION.get("step5_shipping", {})
+    gpr_value = gpr.get("value", "N/A")
+    gpr_text = gpr.get("plain_english", "")
+    st.markdown(
+        '<div class="blue-box"><strong>Geopolitical Risk Index:</strong> '
+        + str(gpr_value)
+        + " (Normal ~100, Gulf War 280, 9/11 350)<br>"
+        + gpr_text
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    ship_current = shipping.get("current", 0)
+    ship_trend = shipping.get("trend", "N/A")
+    ship_text = shipping.get("plain_english", "")
+    st.markdown(
+        '<div class="blue-box"><strong>Shipping (ZIM proxy):</strong> $'
+        + str(round(ship_current, 2))
+        + " &middot; Trend: "
+        + ship_trend
+        + "<br>"
+        + ship_text
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if ENGINE:
+        try:
+            macro = get_macro_indicators()
+            if macro:
+                st.markdown(
+                    '<p class="section-label">Macro Indicators (Data Engine)</p>',
+                    unsafe_allow_html=True,
+                )
+                for k, v in macro.items():
+                    st.write("**" + str(k) + ":** " + str(v))
+        except Exception:
+            pass
+
+# ===========================================================================
+# TAB 8 - Risk Dashboard
+# ===========================================================================
+with tab8:
+    st.markdown(
+        '<p class="section-label">Risk Dashboard</p>', unsafe_allow_html=True
+    )
+
+    # Risk metrics
+    r1, r2, r3, r4 = st.columns(4)
+
+    # Portfolio beta (approximate)
+    defense_weight = (
+        sum(
+            position_data[t]["value"]
+            for t in ["LMT", "RTX", "ITA", "BAESY"]
+        )
+        / portfolio_value
+    )
+    energy_weight = (
+        sum(position_data[t]["value"] for t in ["XOM", "LNG", "CEG"])
+        / portfolio_value
+    )
+    gold_weight = position_data["GLD"]["value"] / portfolio_value
+    # Defense ~0.7 beta, Energy ~1.1, Gold ~0.1
+    est_beta = (
+        defense_weight * 0.7 + energy_weight * 1.1 + gold_weight * 0.1
+    )
+    beta_cls = "green-box" if est_beta < 1 else "amber-box"
+    r1.markdown(
+        '<div class="'
+        + beta_cls
+        + '"><strong>Est. Beta</strong><br>'
+        + str(round(est_beta, 2))
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Max drawdown
+    max_dd = min(d["pnl_pct"] for d in position_data.values())
+    dd_cls = (
+        "red-box"
+        if max_dd < -15
+        else ("amber-box" if max_dd < -5 else "green-box")
+    )
+    r2.markdown(
+        '<div class="'
+        + dd_cls
+        + '"><strong>Max Drawdown</strong><br>'
+        + fmt_pct(max_dd)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Defense concentration
+    defense_conc = defense_weight * 100
+    conc_cls = "amber-box" if defense_conc > 40 else "green-box"
+    r3.markdown(
+        '<div class="'
+        + conc_cls
+        + '"><strong>Defense Concentration</strong><br>'
+        + str(round(defense_conc, 1))
+        + "%</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Cash reserve
+    cash_pct = CASH / portfolio_value * 100
+    cash_cls = "green-box" if cash_pct > 10 else "amber-box"
+    r4.markdown(
+        '<div class="'
+        + cash_cls
+        + '"><strong>Cash Reserve</strong><br>'
+        + str(round(cash_pct, 1))
+        + "%</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Correlation warning
+    st.markdown(
+        '<p class="section-label">Correlation Warnings</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="amber-box">'
+        "<strong>High Correlation:</strong> LMT, RTX, and ITA are all US defense stocks. "
+        "They move together during geopolitical events. If defense sentiment reverses, "
+        "all three will decline simultaneously. Consider this concentrated risk."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Stress test scenarios
+    st.markdown(
+        '<p class="section-label">Stress Test Scenarios</p>',
+        unsafe_allow_html=True,
+    )
+
+    scenarios = [
+        {
+            "name": "Sudden Ceasefire",
+            "description": (
+                "War ends abruptly. Defense stocks drop 10-15%, oil drops 15-20%, "
+                "gold drops 5%. Travel/airlines surge 15-25%."
+            ),
+            "impacts": {
+                "LMT": -12,
+                "RTX": -12,
+                "LNG": -10,
+                "GLD": -5,
+                "ITA": -12,
+                "XOM": -8,
+                "CEG": -3,
+                "BAESY": -12,
+            },
+        },
+        {
+            "name": "Major Escalation",
+            "description": (
+                "Conflict escalates significantly. Defense stocks surge 10-15%, "
+                "oil spikes 20%+, VIX above 35."
+            ),
+            "impacts": {
+                "LMT": 12,
+                "RTX": 12,
+                "LNG": 15,
+                "GLD": 8,
+                "ITA": 12,
+                "XOM": 10,
+                "CEG": 5,
+                "BAESY": 12,
+            },
+        },
+        {
+            "name": "Broad Market Crash (-20%)",
+            "description": (
+                "Systemic selloff. Most stocks fall. Gold may hold or rise. "
+                "High-beta names hit hardest."
+            ),
+            "impacts": {
+                "LMT": -15,
+                "RTX": -18,
+                "LNG": -20,
+                "GLD": 5,
+                "ITA": -18,
+                "XOM": -20,
+                "CEG": -22,
+                "BAESY": -15,
+            },
+        },
+        {
+            "name": "Oil Shock ($100+)",
+            "description": (
+                "Oil spikes above $100 on supply disruption. Energy surges, "
+                "consumers hurt, recession fears."
+            ),
+            "impacts": {
+                "LMT": 3,
+                "RTX": 3,
+                "LNG": 20,
+                "GLD": 5,
+                "ITA": 3,
+                "XOM": 18,
+                "CEG": 5,
+                "BAESY": 3,
+            },
+        },
+    ]
+
+    for scenario in scenarios:
+        with st.expander(scenario["name"]):
+            st.write(scenario["description"])
+            total_impact = 0
+            for _t, impact_pct in scenario["impacts"].items():
+                _d = position_data[_t]
+                dollar_impact = _d["value"] * impact_pct / 100
+                total_impact += dollar_impact
+                _cls = color_class(impact_pct)
+                st.markdown(
+                    '<div class="'
+                    + _cls
+                    + '">'
+                    + _t
+                    + ": "
+                    + fmt_pct(impact_pct)
+                    + " &rarr; "
+                    + fmt_dollar(dollar_impact)
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+            total_cls = color_class(total_impact)
+            total_impact_pct = total_impact / portfolio_value * 100
+            st.markdown(
+                '<div class="'
+                + total_cls
+                + '"><strong>Total Portfolio Impact: '
+                + fmt_dollar(total_impact)
+                + " ("
+                + fmt_pct(total_impact_pct)
+                + ")</strong></div>",
+                unsafe_allow_html=True,
+            )
+
+    # Data engine sections
+    if ENGINE:
+        st.markdown(
+            '<p class="section-label">Options Activity</p>',
+            unsafe_allow_html=True,
+        )
+        try:
+            opts = get_options_activity(PORTFOLIO_TICKERS)
+            if opts:
+                st.dataframe(
+                    pd.DataFrame(opts),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        except Exception:
+            st.info("Options data unavailable.")
+
+        st.markdown(
+            '<p class="section-label">Sentiment</p>',
+            unsafe_allow_html=True,
+        )
+        try:
+            sentiment = get_stocktwits_sentiment(PORTFOLIO_TICKERS)
+            if sentiment:
+                st.dataframe(
+                    pd.DataFrame(sentiment),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        except Exception:
+            st.info("Sentiment data unavailable.")
+
+        st.markdown(
+            '<p class="section-label">Short Interest</p>',
+            unsafe_allow_html=True,
+        )
+        try:
+            si = get_short_interest(PORTFOLIO_TICKERS)
+            if si:
+                st.dataframe(
+                    pd.DataFrame(si),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        except Exception:
+            st.info("Short interest data unavailable.")
+
+        st.markdown(
+            '<p class="section-label">Analyst Ratings</p>',
+            unsafe_allow_html=True,
+        )
+        try:
+            ratings = get_analyst_ratings(PORTFOLIO_TICKERS)
+            if ratings:
+                st.dataframe(
+                    pd.DataFrame(ratings),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        except Exception:
+            st.info("Analyst ratings unavailable.")
     else:
-        st.markdown(f'<div class="card" style="border-radius:8px;padding:10px;text-align:center">'
-            f'<span style="color:#888;font-size:13px">No black swan events detected today</span></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="amber-box">'
+            "Options, sentiment, short interest, and analyst data require data_engine.py. "
+            "Run it to populate these sections."
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
-    # Live indicators
-    st.markdown("---")
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Live global indicators</div>', unsafe_allow_html=True)
-    g1,g2,g3,g4 = st.columns(4)
-    if oil: g1.metric("Oil (WTI)", fmt(oil))
-    if gold: g2.metric("Gold", f"${gold:,.0f}")
-    if vix: g3.metric("VIX", f"{vix:.1f}")
-    if sp: g4.metric("S&P 500", f"{sp:,.0f}")
-
-    # World events from daily file
-    if dc:
-        evlines = []
-        in_ev = False
-        for line in dc.split("\n"):
-            lu = line.upper()
-            if any(k in lu for k in ["GLOBAL EVENT","PORTFOLIO IMPACT","WORLD EVENT","MACRO NUMBER"]):
-                in_ev=True; continue
-            if in_ev:
-                if line.startswith("-----") or (line.startswith("##") and "ACTION" not in line.upper()):
-                    if evlines: break
-                if line.strip(): evlines.append(line)
-        if evlines:
-            st.markdown("---")
-            st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Market context</div>', unsafe_allow_html=True)
-            for line in evlines: st.markdown(line)
-
-    # Perplexity prompt
-    st.markdown("---")
-    st.markdown('<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:8px">Morning intelligence checklist</div>', unsafe_allow_html=True)
-    st.markdown("Open [Perplexity.ai](https://www.perplexity.ai) and paste:")
-    pp = (f"I own: LMT, RTX, LNG, GLD, ITA, XOM, CEG, BAESY. "
-        f"Watching: DAL, RCL. Crypto: XRP, BTC, XLM, ADA, HBAR. "
-        f"Iran war Day {WAR_DAYS}, Ukraine Year 4. "
-        f"Scan every global news source from last 24 hours. "
-        f"Find everything affecting my portfolio. "
-        f"Check: ceasefire signals, danger signals, XRP news, "
-        f"Fed news, fallen angels, black swans. One recommended action.")
-    st.code(pp, language=None)
-
-# ─── Footer ──────────────────────────────────────────────────
+# ===========================================================================
+# FOOTER
+# ===========================================================================
 st.markdown("---")
-st.markdown(f'<div style="text-align:center;font-size:12px;color:#aaa">'
-    f'Ardi Market Dashboard v2.0 &middot; {TIME_NICE} &middot; '
-    f'Works on any device &middot; Bookmark for instant access</div>', unsafe_allow_html=True)
+st.markdown(
+    '<p style="text-align:center;color:#888;font-size:12px">'
+    "Ardi Market Command Center v3.0 &middot; Access: ardi-market-dashboard.streamlit.app"
+    "</p>",
+    unsafe_allow_html=True,
+)
