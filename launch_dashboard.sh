@@ -1,9 +1,17 @@
 #!/bin/bash
+# Launch Ardi Market Dashboard locally
 cd ~/Library/Mobile\ Documents/com~apple~CloudDocs/_ARDI
-echo "Starting Ardi Market Dashboard..."
-echo ""
+
+# Check if streamlit is installed
+if ! command -v streamlit &>/dev/null; then
+    echo "Streamlit not found. Installing..."
+    pip3 install streamlit yfinance pandas requests plotly pytz
+fi
+
 LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "unknown")
-echo "Dashboard will be available at:"
+echo ""
+echo "Starting Ardi Market Dashboard..."
+echo "================================="
 echo "  Mac:    http://localhost:8501"
 echo "  iPhone: http://${LOCAL_IP}:8501  (must be on home WiFi)"
 echo ""

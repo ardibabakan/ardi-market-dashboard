@@ -1,32 +1,442 @@
 EXECUTION RULES — READ FIRST:
-- Run all steps automatically without stopping to ask permission
-- Do not ask shall I proceed or is this correct between steps
+- You are Claude Opus 4.6 running automatically at 3 AM Pacific
+- Run all steps without stopping to ask permission
 - If a step fails try the backup method automatically
-- Only stop if every method for a step has failed
-- Never ask yes or no questions during the run
+- Never ask yes or no questions
 - Print progress updates as you go
-- When fully complete print the final status message and stop
+- Write in plain English throughout — no jargon
+- Save two output files when complete
 
-# ARDI DAILY MARKET RUNNER
-# Runs every weekday at 3 AM Pacific / 6 AM Eastern
-# Owner: Ardi — Orange County CA
+# ARDI DAILY MARKET RUNNER — WORLD-AWARE EDITION
+# Owner: Ardi — beginner investor, Orange County CA
 # Portfolio: $10,000 starting March 13 2026
 # Broker: Fidelity
 # Output folder: MISC/Stock_Market/Daily/
-# Write in plain English throughout — no jargon
+# Active conflict: Iran-US-Israel war started Feb 28 2026
 
 Read foundation data from MISC/Stock_Market/AGENT_9_FOUNDATION_PATCH.json
+This contains entry prices, share counts, earnings dates, and crypto baselines.
 
-Then execute all daily runner steps:
-1. Pull live prices for portfolio stocks (LMT, RTX, LNG, GLD, ITA, XOM, CEG, BAESY), watchlist (DAL, RCL), and macro indicators (^GSPC, ^VIX, ^VIX3M, CL=F, GC=F, TLT, EEM, ZIM)
-2. Scan 200+ fallen angel universe stocks for 30%+ drops from 52-week highs
-3. Calculate portfolio value vs entry prices from foundation file
-4. Check ceasefire signals (oil drop 3%+, VIX below 20, VIX term structure) and escalation signals (oil spike 10%+, VIX above 40)
-5. Calculate oil war premium vs pre-conflict baseline of $64.56
-6. Check earnings date warnings from foundation file
-7. Evaluate fallen angel opportunities (max 5 strong picks)
-8. Pull crypto prices from CoinGecko and compare to baselines
-9. Determine single clear action for today
-10. Save two files: MISC/Stock_Market/Daily/STOCKS_{today}.md and MISC/Stock_Market/Daily/BROAD_UNIVERSE_{today}.md
+============================================================
+SECTION A — SCAN THE ENTIRE WORLD FIRST
+============================================================
 
-Use the exact same format and logic as the previous daily runner output files already in MISC/Stock_Market/Daily/ for reference.
+Before looking at any stocks scan everything happening today.
+Use yfinance, requests, and any available data sources.
+No categories. No limits. No assumptions about what matters.
+
+Check ALL of the following and note anything significant:
+
+ECONOMIC DATA AND CENTRAL BANKS:
+- US jobs/inflation/GDP data if released today
+- Federal Reserve statements, meeting minutes, or emergency actions
+- Any country raising or cutting interest rates today
+- ECB, Bank of England, Bank of Japan news
+- Any currency crisis or sovereign debt default risk
+- Global PMI, consumer confidence, housing, retail sales data
+- Any major economic surprise from China, EU, UK, Japan
+
+CORPORATE AND MARKET NEWS:
+- Any S&P 500 company reporting earnings today
+- Earnings for LMT, RTX, LNG, XOM, CEG, BAESY, DAL, RCL specifically
+- Any major CEO fired, arrested, or resigned
+- Any major M&A, bankruptcy, product recall, or lawsuit verdict
+- Any government contract over $1 billion (especially defence)
+- Any major analyst upgrades or downgrades of portfolio stocks
+- S&P 500 and Nasdaq futures direction pre-market
+
+COMMODITY MARKETS — ALL OF THEM:
+Pull prices using yfinance for: CL=F (WTI oil), BZ=F (Brent),
+NG=F (natural gas), GC=F (gold), SI=F (silver), HG=F (copper),
+ZW=F (wheat), ZC=F (corn), ZS=F (soybeans), UX=F (uranium if available)
+Flag any commodity moving more than 5% today.
+Copper falling = global slowdown signal.
+Uranium rising = bullish for CEG and CCJ.
+Wheat spiking = food inflation and war signal.
+
+GEOPOLITICAL — EVERY CONFLICT:
+- Iran-US-Israel war: Day [X] since Feb 28 2026
+  Note: Markets typically bottom around Day 21 of a conflict
+  Any ceasefire language, escalation, strikes, casualties
+- Ukraine-Russia: front line changes, peace talks, nuclear rhetoric
+- Houthi Red Sea attacks: ships attacked, rerouting (affects ZIM)
+- China-Taiwan: any PLA exercises, incursions, US response
+- North Korea: any missile tests or provocations
+- Any new conflict, election result, coup, sanctions, or diplomatic crisis
+
+ENERGY AND INFRASTRUCTURE:
+- Hormuz Strait status (directly affects oil and LNG)
+- OPEC production decisions
+- US oil inventory data if released
+- LNG terminal news (affects Cheniere LNG position)
+- Any nuclear plant incidents (affects CEG)
+- Any major refinery or pipeline outage
+
+TECHNOLOGY:
+- Any major AI announcement
+- Any major cybersecurity breach (Iran uses Shamoon cyberweapon)
+- Any semiconductor supply chain news
+
+REGULATORY:
+- FDA approvals/rejections
+- FAA decisions (affects DAL)
+- SEC enforcement (especially crypto — affects XRP)
+- Government contract awards (affects LMT, RTX)
+
+CRYPTO:
+- Bitcoin ETF inflows/outflows
+- XRP: SEC lawsuit status, court filings, bank adoptions
+  THIS IS ARDI'S LARGEST CRYPTO HOLDING — check thoroughly
+- Any exchange hack, collapse, or regulatory action
+- Any country banning or adopting crypto
+
+WEATHER AND HEALTH:
+- Any hurricane, earthquake, or extreme weather affecting economic regions
+- Any disease outbreak with pandemic potential
+- Any major drug or vaccine breakthrough
+
+============================================================
+SECTION B — BLACK SWAN DETECTOR
+============================================================
+
+After scanning everything above ask:
+- Is anything happening that has never happened before?
+- Is any major financial institution showing sudden stress?
+- Is any government making an unprecedented decision?
+- Is any asset moving more than 10% in a day for unclear reasons?
+- Are multiple unrelated bad things happening simultaneously?
+- Is there any news that would completely change the investment thesis?
+
+If ANY answer is yes, print this at the VERY TOP of the report:
+
+"BLACK SWAN ALERT — UNUSUAL EVENT DETECTED
+ ==========================================
+ Something unusual is happening today:
+ [Plain English description]
+ Why this matters: [explanation]
+ Recommended action: Move to 50% cash today.
+ Do not make any new purchases. Wait 24-48 hours.
+ Keep GLD — gold rises in black swan events.
+ Fidelity: 800-343-3548"
+
+============================================================
+SECTION C — FILTER BY PORTFOLIO IMPACT
+============================================================
+
+Go through every finding from Section A and ask:
+Does this directly affect any of my 8 stocks or 5 crypto coins?
+
+For each relevant finding explain:
+- What happened (plain English)
+- Which holdings are affected
+- Positive or negative impact
+- Significance: Minor / Moderate / Major / Critical
+- What Ardi should do about it
+
+Rank by impact — Critical first, then Major, Moderate, Minor.
+
+============================================================
+SECTION D — LIVE MARKET DATA AND PORTFOLIO VALUE
+============================================================
+
+Install tools if needed:
+import subprocess
+for p in ["yfinance","pandas","requests","pytz"]:
+    subprocess.run(["pip3","install","--quiet",p])
+
+Pull current prices using yfinance for all 8 positions plus DAL, RCL.
+Read entry prices and share counts from AGENT_9_FOUNDATION_PATCH.json.
+
+For each of the 8 stocks calculate:
+- Entry price (from foundation) and current price (live)
+- Shares owned and dollar/percentage gain or loss
+- Stop loss level: entry price minus 15%
+- Profit target level: entry price plus 25%
+- Whether stop loss or profit target has been hit
+- Days until next earnings (from foundation)
+- HOLD / REVIEW / SELL recommendation
+
+Portfolio totals:
+- Total invested, total current value, total gain/loss
+- Cash reserve remaining for Phase B ($1,500.33)
+
+Plain English summary:
+"Your portfolio started at $[X]. It is currently worth $[X].
+ You are [up/down] $[X] which is [+/-X]% since you started."
+
+============================================================
+SECTION E — WAR SIGNAL TRACKER
+============================================================
+
+War started: February 28 2026. Today is Day [X].
+
+Historical context:
+"Markets typically hit their lowest around Day 21 of a conflict
+ before starting to recover. We are currently at Day [X]."
+
+CEASEFIRE SIGNALS — check all 6:
+
+Signal 1: Oil dropped 3%+ in one day without supply news
+  Compare today's oil (CL=F) to yesterday's using yfinance
+  If drop >= 3%: FIRED
+
+Signal 2: VIX below 20
+  Pull ^VIX using yfinance
+  If below 20: FIRED
+
+Signal 3: VIX term structure (backwardation check)
+  Compare ^VIX to ^VIX3M
+  If VIX > VIX3M (backwardation): FIRED
+  Plain English: "The options market [does/does not] expect
+  near-term resolution of the conflict"
+
+Signal 4: Iranian FM uses diplomacy language
+  Mark: MANUAL CHECK
+  Perplexity search: "Iranian foreign minister peace ceasefire statement today"
+
+Signal 5: Third party mediator announced
+  Mark: MANUAL CHECK
+  Perplexity search: "Iran US ceasefire mediator country today"
+
+Signal 6: Trump makes clear ceasefire statement
+  Mark: MANUAL CHECK
+  Perplexity search: "Trump Iran ceasefire peace statement today"
+
+If 2+ ceasefire signals fired:
+  "CEASEFIRE ALERT — Buy DAL and RCL now.
+   $375 each from your $1,500 cash reserve.
+   Fidelity: Search ticker → Buy → Limit Order → Submit"
+
+DANGER SIGNALS:
+Signal 1: Oil spiked 10%+ in one day — check CL=F
+Signal 2: VIX above 40 — check ^VIX
+Signals 3-5: Manual checks (nuclear, China-Taiwan, carrier attack)
+
+If any danger signal fired:
+  "DANGER — Do not trade today. Fidelity: 800-343-3548"
+
+============================================================
+SECTION F — OIL MARKET ANALYSIS
+============================================================
+
+Pre-conflict baseline: $64.56
+Current oil price: [live from CL=F]
+War premium: current minus 64.56
+Premium percentage: ((current - 64.56) / 64.56) * 100
+After ceasefire estimate: drop 60-80% of premium
+
+"Oil is at $[X]. Before the war it was ~$64.56.
+ The war adds $[X] — the war premium.
+ When the war ends, oil expected to fall to $[range].
+ When oil drops: XOM falls, DAL and RCL rise."
+
+============================================================
+SECTION G — FALLEN ANGEL SCANNER (NO LIMIT)
+============================================================
+
+Scan ALL stocks in this universe using yfinance — show EVERY one that qualifies:
+
+Technology: AAPL,MSFT,GOOGL,META,AMZN,NVDA,AMD,INTC,ORCL,CRM,ADBE,NFLX,PYPL,UBER,LYFT,SNAP,PINS,RBLX,COIN,HOOD
+Airlines: DAL,UAL,AAL,LUV,JBLU,ALK
+Cruise: CCL,RCL,NCLH
+Hotels/Travel: MAR,HLT,H,ABNB,BKNG,EXPE
+Retail: TGT,WMT,COST,DG,DLTR,M,KSS
+Energy: XOM,CVX,COP,SLB,HAL,OXY,DVN,PSX,VLO
+Defence: LMT,RTX,NOC,GD,HII,BA,LDOS,CACI
+Finance: JPM,BAC,WFC,C,GS,MS,AXP,V,MA,COF
+Healthcare: JNJ,PFE,MRNA,ABBV,MRK,LLY,UNH,CVS,HUM
+Real Estate: AMT,PLD,EQIX,SPG,O,VTR,WY
+Industrial: CAT,DE,MMM,GE,HON,EMR,ROK,ITW
+Construction: FLR,KBR,TTEK,PWR,MTZ
+Semiconductor: QCOM,AVGO,MU,AMAT,LRCX
+Cybersecurity: CRWD,PANW,ZS,FTNT,S,CYBR
+Shipping: ZIM,DAC,SBLK,MATX
+Nuclear: CEG,CCJ,UEC,NNE
+Cannabis: TLRY,CGC
+Biotech: MRNA,BNTX,NVAX,VRTX,REGN,BIIB
+
+Pull 52-week high and current price for each.
+Flag ALL stocks down 30%+ from 52-week high.
+Sort by biggest drop first. Show every single one — no maximum.
+
+For each evaluate:
+1. Solid company? (S&P 500 member = yes)
+2. Drop temporary or permanent? Be SPECIFIC about reason:
+   - War-related fear (airlines, cruise, travel)
+   - Oil volatility (energy)
+   - Post-pandemic normalization (biotech)
+   - Rate sensitivity (real estate, growth tech)
+   - Company-specific issue (name it)
+   DO NOT use generic "market-wide sell-off" for everything
+3. Specific recovery trigger (ceasefire, rate cut, earnings beat, etc.)
+4. Timeline: Days / Weeks / Months / Unknown
+5. Can survive until recovery? HIGH RISK if debt/bankruptcy concern
+
+Show STRONG opportunities (solid + temporary + known trigger + survive):
+"[COMPANY] — down [X]% from its high
+ What it does: [one sentence]
+ Why it dropped: [SPECIFIC temporary reason]
+ What causes recovery: [specific trigger]
+ Current price: $[X]
+ Risk: [Low/Medium/High]"
+
+Also show WATCH LIST (solid + unclear trigger).
+
+============================================================
+SECTION H — MOMENTUM SCANNER
+============================================================
+
+From same universe find stocks going UP strongly.
+Flag any stock meeting ALL of these:
+- Up 20%+ from 52-week LOW
+- In a relevant sector (defence, energy, cyber, nuclear, shipping, AI)
+
+For each: ticker, what it does, why it's rising, current price.
+
+============================================================
+SECTION I — CRYPTO UPDATE
+============================================================
+
+Pull prices from CoinGecko:
+URL: https://api.coingecko.com/api/v3/simple/price
+ids: bitcoin,ripple,stellar,cardano,hedera-hashgraph
+vs_currencies: usd
+include_24hr_change: true
+
+Compare to baselines from AGENT_9_FOUNDATION_PATCH.json.
+Show XRP first — it is Ardi's largest holding.
+
+For each coin: baseline, current, dollar change, percentage change, 24h change.
+
+Also pull global market: https://api.coingecko.com/api/v3/global
+Report total market cap, BTC dominance, direction.
+
+============================================================
+SECTION J — EARNINGS CALENDAR
+============================================================
+
+Read earnings dates from AGENT_9_FOUNDATION_PATCH.json.
+Calculate days until each date from today.
+If date is in the past, note "Already reported — next date TBD"
+
+Within 21 days: "EARNINGS COMING — [STOCK] in [X] days on [DATE]"
+Within 7 days: "URGENT — [STOCK] reports in [X] days. No new purchases."
+
+============================================================
+SECTION K — STOP LOSS AND PROFIT ALERTS
+============================================================
+
+For each stock:
+Stop loss = entry price * 0.85 (down 15%)
+Profit target = entry price * 1.25 (up 25%)
+
+If stop loss hit:
+"STOP LOSS HIT — [STOCK]
+ You paid $[entry]. Stop loss: $[level]. Now: $[current].
+ Consider selling to prevent further losses.
+ Fidelity: Search [TICKER] → Sell → Market Order → Submit
+ Before selling: Has the reason you bought this changed?
+ If no — this may be a temporary dip. If yes — sell."
+
+If profit target hit:
+"PROFIT TARGET — [STOCK] is up 25%!
+ Consider selling HALF to lock in gains.
+ Fidelity: Search [TICKER] → Sell → [half shares] shares"
+
+============================================================
+SECTION L — TAX TRACKING
+============================================================
+
+Entry date for all stocks: approximately March 13 2026.
+Long-term capital gains qualification: hold until March 13 2027.
+Days remaining: [calculate]
+
+"To pay lower taxes on profits, hold until March 13 2027.
+ That is [X] days from now. If you sell before then,
+ the government takes a larger cut of your profit."
+
+============================================================
+SECTION M — FOMC AND FED TRACKER
+============================================================
+
+2026 FOMC dates: Jan 28, Mar 18, May 6, Jun 17, Jul 29, Sep 16, Nov 4, Dec 16
+Find next meeting from today. Calculate days away.
+
+If within 14 days: "WARNING: Fed meeting in [X] days.
+ Rate cut = add to positions. Rate hold = no action. Rate hike = hold cash."
+
+============================================================
+SECTION N — WEEKLY SUMMARY (MONDAYS ONLY)
+============================================================
+
+If today is Monday, add a special weekly summary:
+- Portfolio value start vs end of last week
+- Best and worst performer
+- Signals fired during the week
+- Major events that affected portfolio
+- Is the thesis still valid? (honest assessment)
+
+============================================================
+SECTION O — CORRELATION WARNING
+============================================================
+
+LMT, RTX, and ITA are all defence stocks (ITA contains both).
+If all three move in the same direction on the same day:
+"NOTE: Defence stocks moved together today.
+ LMT [+/-X%], RTX [+/-X%], ITA [+/-X%]
+ This is normal — they are related."
+
+============================================================
+SECTION P — PERPLEXITY MORNING CHECKLIST
+============================================================
+
+Add at end of every report:
+
+"YOUR MORNING INTELLIGENCE CHECKLIST
+ Open perplexity.ai and paste this prompt:
+
+ I own: LMT, RTX, LNG, GLD, ITA, XOM, CEG, BAESY
+ Watching: DAL, RCL | Crypto: XRP, BTC, XLM, ADA, HBAR
+ Iran war Day [X], Ukraine Year 4
+ Scan every news source globally in last 24 hours.
+ Find everything affecting my portfolio.
+ Check: ceasefire signals, danger signals, XRP news,
+ Fed news, fallen angel opportunities, black swans.
+ Give me one recommended action."
+
+============================================================
+SECTION Q — TODAY'S SINGLE ACTION
+============================================================
+
+This appears at the VERY TOP of the report.
+
+Priority order:
+1. Black Swan → "Move to 50% cash"
+2. Escalation signal → "Do not trade today"
+3. Stop loss hit → "STOP LOSS — [STOCK] needs attention"
+4. 2+ ceasefire signals → "Buy DAL and RCL now"
+5. Profit target hit → "Sell half of [STOCK]"
+6. Earnings within 7 days → "Earnings warning for [STOCK]"
+7. Strong fallen angel → "New opportunity: [STOCK]"
+8. Default → "HOLD EVERYTHING. No trades needed today."
+
+============================================================
+SECTION R — SAVE THE FILES
+============================================================
+
+Save to MISC/Stock_Market/Daily/:
+
+FILE 1: STOCKS_{today}.md
+Order: Action (Q), Black swan (B), Portfolio (D), Stop loss/profit (K),
+War signals (E), Oil (F), Earnings (J), Tax (L), FOMC (M),
+Correlation (O), Weekly if Monday (N), Perplexity (P)
+
+FILE 2: BROAD_UNIVERSE_{today}.md
+Order: Global events (A), Portfolio impact (C), All fallen angels (G),
+Momentum (H), Full crypto (I), Reconstruction watch (FLR, KBR at bottom)
+
+Print when done:
+"DAILY RUNNER COMPLETE — {today}
+ STOCKS_{today}.md saved
+ BROAD_UNIVERSE_{today}.md saved
+ Location: MISC/Stock_Market/Daily/"
