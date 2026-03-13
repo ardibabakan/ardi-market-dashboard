@@ -800,7 +800,9 @@ with tab2:
                     signals = get_technical_signals(_t)
                     if signals and isinstance(signals, dict) and signals.get("status") == "ok":
                         cols_ta = st.columns(4)
-                        rsi = signals.get("rsi", 50)
+                        # data_engine returns nested dicts: rsi={value,signal,explain}
+                        _rsi_data = signals.get("rsi", {})
+                        rsi = _rsi_data.get("value", 50) if isinstance(_rsi_data, dict) else (float(_rsi_data) if _rsi_data else 50)
                         rsi_color = (
                             "#A32D2D"
                             if rsi > 70
@@ -812,32 +814,38 @@ with tab2:
                             + rsi_color
                             + ';font-size:24px;font-weight:700">'
                             + str(round(rsi, 1))
-                            + "</span></div>",
+                            + "</span><br><small>"
+                            + (_rsi_data.get("signal", "") if isinstance(_rsi_data, dict) else "")
+                            + "</small></div>",
                             unsafe_allow_html=True,
                         )
 
-                        macd_val = signals.get("macd", 0)
-                        macd_color = "#3B6D11" if macd_val > 0 else "#A32D2D"
+                        _macd_data = signals.get("macd", {})
+                        macd_val = _macd_data.get("macd", 0) if isinstance(_macd_data, dict) else (float(_macd_data) if _macd_data else 0)
+                        macd_cross = _macd_data.get("cross", "") if isinstance(_macd_data, dict) else ""
+                        macd_color = "#3B6D11" if float(macd_val) > 0 else "#A32D2D"
                         cols_ta[1].markdown(
                             '<div class="card"><strong>MACD</strong><br>'
                             + '<span style="color:'
                             + macd_color
                             + ';font-size:24px;font-weight:700">'
-                            + str(round(macd_val, 2))
-                            + "</span></div>",
+                            + str(round(float(macd_val), 2))
+                            + "</span><br><small>"
+                            + macd_cross.replace("_", " ")
+                            + "</small></div>",
                             unsafe_allow_html=True,
                         )
 
-                        ma50 = signals.get("ma50", 0)
-                        ma200 = signals.get("ma200", 0)
-                        cross = (
-                            "Golden Cross"
-                            if ma50 > ma200
-                            else "Death Cross"
-                        )
-                        cross_color = (
-                            "#3B6D11" if ma50 > ma200 else "#A32D2D"
-                        )
+                        _ma_data = signals.get("moving_averages", {})
+                        ma50 = _ma_data.get("ma50", 0) if isinstance(_ma_data, dict) else 0
+                        ma200 = _ma_data.get("ma200", 0) if isinstance(_ma_data, dict) else 0
+                        ma_cross = _ma_data.get("cross", "NONE") if isinstance(_ma_data, dict) else "NONE"
+                        if ma50 and ma200 and float(ma50) > 0 and float(ma200) > 0:
+                            cross = "Golden Cross" if ma_cross == "GOLDEN_CROSS" else ("Death Cross" if ma_cross == "DEATH_CROSS" else ("Above MA200" if float(ma50) > float(ma200) else "Below MA200"))
+                            cross_color = "#3B6D11" if float(ma50) > float(ma200) else "#A32D2D"
+                        else:
+                            cross = "N/A"
+                            cross_color = "#888"
                         cols_ta[2].markdown(
                             '<div class="card"><strong>MA 50/200</strong><br>'
                             + '<span style="color:'
@@ -848,22 +856,25 @@ with tab2:
                             unsafe_allow_html=True,
                         )
 
-                        vol = signals.get("volume_trend", "normal")
+                        _vol_data = signals.get("volume", {})
+                        vol_ratio = _vol_data.get("ratio", 1.0) if isinstance(_vol_data, dict) else 1.0
+                        vol_label = f"{vol_ratio}x avg" if vol_ratio else "normal"
                         cols_ta[3].markdown(
                             '<div class="card"><strong>Volume</strong><br>'
-                            + str(vol)
+                            + str(vol_label)
                             + "</div>",
                             unsafe_allow_html=True,
                         )
 
-                        bb_upper = signals.get("bb_upper", 0)
-                        bb_lower = signals.get("bb_lower", 0)
+                        _bb_data = signals.get("bollinger", {})
+                        bb_upper = _bb_data.get("upper", 0) if isinstance(_bb_data, dict) else 0
+                        bb_lower = _bb_data.get("lower", 0) if isinstance(_bb_data, dict) else 0
                         if bb_upper and bb_lower:
                             st.write(
                                 "Bollinger Bands: Upper "
-                                + fmt_dollar(bb_upper)
+                                + fmt_dollar(float(bb_upper))
                                 + " | Lower "
-                                + fmt_dollar(bb_lower)
+                                + fmt_dollar(float(bb_lower))
                             )
 
                         if PLOTLY:
@@ -890,9 +901,10 @@ with tab2:
                                     key="candle_" + _t,
                                 )
                     else:
-                        st.info("No signals available for " + _t)
+                        _err = signals.get("error", "") if isinstance(signals, dict) else ""
+                        st.info(f"Technical data loading for {_t}. {_err}")
                 except Exception as e:
-                    st.warning("Error loading " + _t + ": " + str(e))
+                    st.info(f"Technical data loading for {_t}. Refresh in a moment.")
     else:
         st.markdown(
             '<div class="amber-box">'

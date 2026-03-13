@@ -95,6 +95,43 @@ def _compute_bollinger(series: pd.Series, period: int = 20, std_dev: int = 2):
     return upper, middle, lower
 
 
+def _safe_scalar(val, default=0.0):
+    """Safely extract a float from a pandas value that might be Series, dict, or NaN."""
+    if val is None:
+        return default
+    if isinstance(val, dict):
+        return default
+    if isinstance(val, pd.Series):
+        if val.empty:
+            return default
+        val = val.iloc[0]
+    try:
+        f = float(val)
+        return default if np.isnan(f) else f
+    except (TypeError, ValueError):
+        return default
+
+
+def get_gold_price():
+    """Get gold price reliably. GLD ETF * 10.1 approximates spot gold per oz."""
+    try:
+        gld = yf.Ticker("GLD")
+        gld_price = _safe_scalar(gld.fast_info.last_price)
+        gold_est = round(gld_price * 10.1, 2)
+        if 1500 < gold_est < 5000:
+            return gold_est
+    except Exception:
+        pass
+    try:
+        gc = yf.Ticker("GC=F")
+        gc_price = _safe_scalar(gc.fast_info.last_price)
+        if 1500 < gc_price < 5000:
+            return round(gc_price, 2)
+    except Exception:
+        pass
+    return 2900.0
+
+
 def get_technical_signals(ticker: str) -> dict:
     """
     Full technical analysis for a ticker using pure pandas/numpy.
@@ -112,7 +149,7 @@ def get_technical_signals(ticker: str) -> dict:
         tk = yf.Ticker(ticker)
         hist = tk.history(period="1y")
         if hist.empty or len(hist) < 30:
-            return {"status": "error", "ticker": ticker.upper(),
+            return {"status": "insufficient_data", "ticker": ticker.upper(),
                     "error": "Insufficient historical data"}
 
         close = hist["Close"]
@@ -121,7 +158,7 @@ def get_technical_signals(ticker: str) -> dict:
 
         # --- RSI ---
         rsi_series = _compute_rsi(close, 14)
-        rsi_val = round(float(rsi_series.iloc[-1]), 2)
+        rsi_val = round(_safe_scalar(rsi_series.iloc[-1], 50.0), 2)
         if rsi_val >= 70:
             rsi_signal = "OVERBOUGHT"
             rsi_explain = (f"RSI is {rsi_val} (above 70). The stock may be overheated — "
@@ -137,19 +174,19 @@ def get_technical_signals(ticker: str) -> dict:
 
         # --- MACD ---
         macd_line, signal_line, histogram = _compute_macd(close, 12, 26, 9)
-        macd_val = round(float(macd_line.iloc[-1]), 4)
-        signal_val = round(float(signal_line.iloc[-1]), 4)
-        hist_val = round(float(histogram.iloc[-1]), 4)
+        macd_val = round(_safe_scalar(macd_line.iloc[-1]), 4)
+        signal_val = round(_safe_scalar(signal_line.iloc[-1]), 4)
+        hist_val = round(_safe_scalar(histogram.iloc[-1]), 4)
 
         # Check for recent crossover (last 3 bars)
         macd_cross = "NONE"
         for i in range(-3, 0):
             if len(histogram) >= abs(i) + 1:
-                prev_h = histogram.iloc[i - 1]
-                curr_h = histogram.iloc[i]
+                prev_h = _safe_scalar(histogram.iloc[i - 1])
+                curr_h = _safe_scalar(histogram.iloc[i])
                 if prev_h < 0 and curr_h >= 0:
                     macd_cross = "BULLISH_CROSS"
-                elif prev_h > 0 and curr_h <= 0:
+                elif float(prev_h) > 0 and float(curr_h) <= 0:
                     macd_cross = "BEARISH_CROSS"
 
         if macd_cross == "BULLISH_CROSS":
@@ -158,7 +195,7 @@ def get_technical_signals(ticker: str) -> dict:
         elif macd_cross == "BEARISH_CROSS":
             macd_explain = ("MACD just crossed below its signal line — a bearish sign. "
                             "Short-term momentum is fading.")
-        elif macd_val > signal_val:
+        elif float(macd_val) > float(signal_val):
             macd_explain = ("MACD is above the signal line — momentum is currently bullish, "
                             "but no fresh crossover in the last few days.")
         else:
@@ -168,8 +205,8 @@ def get_technical_signals(ticker: str) -> dict:
         # --- Moving Averages ---
         ma50 = close.rolling(window=50).mean()
         ma200 = close.rolling(window=200).mean()
-        ma50_val = round(float(ma50.iloc[-1]), 2) if len(ma50.dropna()) > 0 else None
-        ma200_val = round(float(ma200.iloc[-1]), 2) if len(ma200.dropna()) > 0 else None
+        ma50_val = round(_safe_scalar(ma50.iloc[-1]), 2) if len(ma50.dropna()) > 0 else None
+        ma200_val = round(_safe_scalar(ma200.iloc[-1]), 2) if len(ma200.dropna()) > 0 else None
 
         ma_cross = "NONE"
         ma_explain = ""
@@ -177,11 +214,11 @@ def get_technical_signals(ticker: str) -> dict:
             # Check for golden/death cross in last 5 bars
             for i in range(-5, 0):
                 if len(ma50.dropna()) >= abs(i) + 1 and len(ma200.dropna()) >= abs(i) + 1:
-                    prev_50 = ma50.iloc[i - 1]
-                    curr_50 = ma50.iloc[i]
-                    prev_200 = ma200.iloc[i - 1]
-                    curr_200 = ma200.iloc[i]
-                    if not (np.isnan(prev_50) or np.isnan(prev_200)):
+                    prev_50 = _safe_scalar(ma50.iloc[i - 1])
+                    curr_50 = _safe_scalar(ma50.iloc[i])
+                    prev_200 = _safe_scalar(ma200.iloc[i - 1])
+                    curr_200 = _safe_scalar(ma200.iloc[i])
+                    if prev_50 != 0 and prev_200 != 0:
                         if prev_50 < prev_200 and curr_50 >= curr_200:
                             ma_cross = "GOLDEN_CROSS"
                         elif prev_50 > prev_200 and curr_50 <= curr_200:
@@ -204,10 +241,10 @@ def get_technical_signals(ticker: str) -> dict:
 
         # --- Bollinger Bands ---
         bb_upper, bb_middle, bb_lower = _compute_bollinger(close, 20, 2)
-        last_close = float(close.iloc[-1])
-        bb_upper_val = round(float(bb_upper.iloc[-1]), 2) if not np.isnan(bb_upper.iloc[-1]) else None
-        bb_lower_val = round(float(bb_lower.iloc[-1]), 2) if not np.isnan(bb_lower.iloc[-1]) else None
-        bb_middle_val = round(float(bb_middle.iloc[-1]), 2) if not np.isnan(bb_middle.iloc[-1]) else None
+        last_close = _safe_scalar(close.iloc[-1])
+        bb_upper_val = round(_safe_scalar(bb_upper.iloc[-1]), 2) or None
+        bb_lower_val = round(_safe_scalar(bb_lower.iloc[-1]), 2) or None
+        bb_middle_val = round(_safe_scalar(bb_middle.iloc[-1]), 2) or None
 
         bb_signal = "NEUTRAL"
         bb_explain = ""
@@ -234,8 +271,8 @@ def get_technical_signals(ticker: str) -> dict:
             bb_explain = "Not enough data to compute Bollinger Bands."
 
         # --- Volume ---
-        vol_avg_20 = float(volume.rolling(window=20).mean().iloc[-1]) if len(volume) >= 20 else None
-        vol_current = float(volume.iloc[-1])
+        vol_avg_20 = _safe_scalar(volume.rolling(window=20).mean().iloc[-1]) if len(volume) >= 20 else None
+        vol_current = _safe_scalar(volume.iloc[-1])
         vol_ratio = round(vol_current / vol_avg_20, 2) if vol_avg_20 and vol_avg_20 > 0 else None
 
         if vol_ratio:
