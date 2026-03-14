@@ -9,9 +9,16 @@ interface TechnicalTabProps {
   snapshot: DashboardSnapshot | null;
 }
 
-function fmt(val: number | null | undefined, decimals = 2): string {
-  if (val == null || isNaN(val)) return "N/A";
-  return val.toFixed(decimals);
+function num(val: number | string | null | undefined): number | null {
+  if (val == null) return null;
+  const n = Number(val);
+  return isNaN(n) ? null : n;
+}
+
+function fmt(val: number | string | null | undefined, decimals = 2): string {
+  const n = num(val);
+  if (n == null) return "N/A";
+  return n.toFixed(decimals);
 }
 
 function scoreBadge(score: string | null | undefined) {
@@ -35,16 +42,18 @@ function scoreBadge(score: string | null | undefined) {
   );
 }
 
-function rsiColor(rsi: number | null | undefined): string {
-  if (rsi == null) return "text-txt-muted";
-  if (rsi >= 70) return "text-loss";
-  if (rsi <= 30) return "text-profit";
+function rsiColor(rsi: number | string | null | undefined): string {
+  const n = num(rsi);
+  if (n == null) return "text-txt-muted";
+  if (n >= 70) return "text-loss";
+  if (n <= 30) return "text-profit";
   return "text-txt";
 }
 
-function macdColor(val: number | null | undefined): string {
-  if (val == null) return "text-txt-muted";
-  return val >= 0 ? "text-profit" : "text-loss";
+function macdColor(val: number | string | null | undefined): string {
+  const n = num(val);
+  if (n == null) return "text-txt-muted";
+  return n >= 0 ? "text-profit" : "text-loss";
 }
 
 export default function TechnicalTab({ snapshot: _snapshot }: TechnicalTabProps) {
@@ -174,7 +183,7 @@ export default function TechnicalTab({ snapshot: _snapshot }: TechnicalTabProps)
                 <p
                   className={clsx(
                     "font-medium",
-                    volRatio != null && volRatio >= 2.0 ? "text-warning" : "text-txt"
+                    num(volRatio) != null && num(volRatio)! >= 2.0 ? "text-warning" : "text-txt"
                   )}
                 >
                   {volRatio != null ? `${fmt(volRatio)}x` : "N/A"}
