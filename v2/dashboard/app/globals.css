@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #0A0A0F;
+  color: #F0F0F5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  @apply bg-bg-surface border border-bg-elevated rounded-xl p-4;
+}
+
+.green { color: #22C55E; }
+.red { color: #EF4444; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #111118; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
