@@ -3,3 +3,6 @@ runner_errors.txt
 __pycache__/
 *.pyc
 .DS_Store
+.env
+v2/data/cache/
+v2/data/agent_outputs/
