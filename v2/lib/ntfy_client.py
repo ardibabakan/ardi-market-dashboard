@@ -33,7 +33,7 @@ def send_alert(title: str, message: str, priority: str = "default",
         headers["Tags"] = ",".join(tags)
 
     try:
-        response = requests.post(NTFY_URL, data=message, headers=headers)
+        response = requests.post(NTFY_URL, data=message.encode("utf-8"), headers=headers)
         if response.status_code == 200:
             logger.info(f"Alert sent: {title}")
             return True
