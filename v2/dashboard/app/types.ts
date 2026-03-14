@@ -131,17 +131,20 @@ export interface TechnicalAnalysisRow {
   id: string;
   created_at: string;
   ticker: string;
-  rsi: number;
-  macd: number;
-  macd_signal: number;
-  sma_20: number;
-  sma_50: number;
-  sma_200: number;
-  atr: number;
-  support?: number;
-  resistance?: number;
-  trend: "bullish" | "bearish" | "neutral";
-  recommendation: string;
+  rsi: number | null;
+  rsi_signal: string | null;
+  macd: number | null;
+  macd_signal_line: number | null;
+  macd_histogram: number | null;
+  macd_crossover: string | null;
+  ma50: number | null;
+  ma200: number | null;
+  ma_status: string | null;
+  bb_upper: number | null;
+  bb_lower: number | null;
+  bb_position: number | null;
+  volume_ratio: number | null;
+  overall_score: string | null;
 }
 
 export interface AgentRunRow {
